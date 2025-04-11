@@ -9,7 +9,7 @@ import useBackPressed from '@/hooks/useBackPressed';
 
 export default function ContentPlayerScreen() {
   const video = useRef<Video>(null);
-  const [status, setStatus] = useState<AVPlaybackStatus>();
+  const [status, setStatus] = useState<AVPlaybackStatus | undefined>();
   const [resizeMode, setResizeMode] = useState<ResizeMode>(ResizeMode.CONTAIN)
   const navigation = useNavigation()
 
