@@ -7,7 +7,7 @@ export default function ShowLayout() {
             <Stack.Screen name="movie" options={{headerShown:false}}/>
             <Stack.Screen name="show" options={{headerShown:false}}/>
             <Stack.Screen name="[id]" options={{headerShown:false}}/>
-
+            <Stack.Screen name="more" options={{headerShown:false}}/>
         </Stack>
 
     );

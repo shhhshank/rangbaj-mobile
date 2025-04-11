@@ -1,61 +1,64 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 import { TabBarIcon } from '@/components/navigation/TabBarIcon';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import Header from '@/components/common/Header';
+
+// Simulating unread notifications (in a real app, this would come from a notifications service)
+const hasUnreadNotifications = true;
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const [unreadNotifications, setUnreadNotifications] = useState(hasUnreadNotifications);
 
   return (
-    <>
-    <Header/>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-  
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'home-variant' : 'home-variant-outline'} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
       <Tabs.Screen
         name="search"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'movie-search' : 'movie-search-outline'} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <TabBarIcon name="magnify" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="watchlist"
+        name="notifications"
         options={{
-          title: 'Watch List',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'playlist-play' : 'playlist-play'} color={color} />
+          title: 'Notifications',
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon 
+              name="bell" 
+              color={color} 
+              showBadge={unreadNotifications} 
+            />
           ),
         }}
+        listeners={{
+          tabPress: () => {
+            // When the user clicks on the notifications tab, clear the badge
+            setUnreadNotifications(false);
+          },
+        }}
       />
-
-<Tabs.Screen
+      <Tabs.Screen
         name="account"
         options={{
           title: 'Account',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'account' : 'account-outline'} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <TabBarIcon name="account" color={color} />,
         }}
       />
     </Tabs>
-    </>
   );
 }

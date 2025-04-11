@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, View, Dimensions } from 'react-native';
 import { Svg, Path, LinearGradient, Stop, Defs, G, Rect } from 'react-native-svg';
 import Animated, { 
@@ -11,7 +11,6 @@ import Animated, {
   Easing, 
   runOnJS
 } from 'react-native-reanimated';
-import { Audio } from 'expo-av';
 
 // Create animated components for SVG elements
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -29,47 +28,10 @@ const Splash = ({onAnimationEnd}: SplashProps) => {
   const pathFillOpacity = useSharedValue(0);
   const backgroundAnim = useSharedValue(0);
   
-  // Use ref for sound to avoid Reanimated UI thread issues
-  const soundRef = useRef<Audio.Sound | null>(null);
-  
   const { width } = Dimensions.get('window');
   const logoSize = Math.min(width * 0.7, 300); // Cap at 300 or 70% of screen width
 
-  // Function to unload sound (to be called with runOnJS)
-  const unloadSound = async () => {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-    } catch (e) {
-      console.log('Error unloading sound:', e);
-    }
-  };
-
-  // Function to call animation end (to be called with runOnJS)
-  const handleAnimationEnd = () => {
-    unloadSound();
-    onAnimationEnd();
-  };
-
   useEffect(() => {
-    // Play logo sound
-    const playSound = async () => {
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require('../../assets/audio/logo_sound.wav'),
-          { shouldPlay: true }
-        );
-        soundRef.current = sound;
-      } catch (e) {
-        // Silently fail if audio fails to load
-        console.log('Could not play logo sound:', e);
-      }
-    };
-    
-    playSound();
-    
     // Initial fade in animation
     opacity.value = withTiming(1, { duration: 600 });
     
@@ -135,17 +97,12 @@ const Splash = ({onAnimationEnd}: SplashProps) => {
         duration: 200, 
         easing: Easing.out(Easing.cubic)
       }, () => {
-        // Use runOnJS for the callback to properly handle audio
-        runOnJS(handleAnimationEnd)();
+        runOnJS(onAnimationEnd)();
       }));
       
     }, 4500);
     
-    return () => {
-      clearTimeout(timeout);
-      // Clean up sound if component unmounts
-      unloadSound();
-    };
+    return () => clearTimeout(timeout);
   }, []);
 
   // Container animation

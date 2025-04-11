@@ -1,27 +1,560 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, Dimensions, TouchableOpacity, FlatList, StatusBar, ActivityIndicator, ListRenderItem } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { useThemeColor } from '@/hooks/useThemeColor';
+import { ThemedText } from '@/components/common/ThemedText';
+import { ThemedView } from '@/components/common/ThemedView';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchShow, selectShowById, selectIsLoading } from '@/redux/slices/contentSlice';
+import { AppDispatch, RootState } from '@/redux/store';
+import { Show, CastMember, RelatedContent, Episode } from '@/redux/types';
 
-export default function ShowDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export default function ShowContentScreen() {
+  const { id } = useLocalSearchParams();
+  const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
+  const [activeTab, setActiveTab] = useState('Episodes');
+  
+  // Get show from Redux store
+  const show = useSelector((state: RootState) => selectShowById(state, id as string));
+  const loading = useSelector(selectIsLoading);
+  
+  // Fetch show data if not already in store
+  useEffect(() => {
+    if (id) {
+      // Always fetch fresh data when navigating to a show
+      dispatch(fetchShow(id as string));
+    }
+  }, [dispatch, id]);
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Show Details</Text>
-      <Text>Show ID: {id}</Text>
+  // Get theme colors
+  const background = useThemeColor('background');
+  const text = useThemeColor('text');
+  const textSecondary = useThemeColor('textSecondary');
+  const primary = useThemeColor('primary');
+  const border = useThemeColor('border');
+  const solidBackground = useThemeColor('background');
+  
+  // Handle play button press
+  const handlePlay = () => {
+    console.log('Playing show:', id);
+    // In a real app, navigate to video player or start playback
+  };
+  
+  // Handle back button press
+  const handleBack = () => {
+    router.back();
+  };
+  
+  // Handle episode press
+  const handleEpisodePress = (episodeId: string) => {
+    console.log('Playing episode:', episodeId);
+    // In a real app, navigate to video player or start playback
+  };
+  
+  // Render cast item
+  const renderCastItem: ListRenderItem<CastMember> = ({ item }) => (
+    <View style={styles.castItem}>
+      <Image source={{ uri: item.image }} style={styles.castImage} />
+      <Text style={[styles.castName, {color: text}]}>{item.name}</Text>
+      <Text style={[styles.characterName, {color: textSecondary}]}>{item.character}</Text>
     </View>
   );
+  
+  // Render related show item
+  const renderRelatedItem: ListRenderItem<RelatedContent> = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.relatedItem} 
+      onPress={() => router.push(`/content/show/${item.id}`)}
+    >
+      <Image source={{ uri: item.thumbnail }} style={styles.relatedThumbnail} />
+      <Text style={[styles.relatedTitle, {color: text}]}>{item.title}</Text>
+    </TouchableOpacity>
+  );
+  
+  // Render episode item
+  const renderEpisodeItem: ListRenderItem<Episode> = ({ item }) => (
+    <TouchableOpacity 
+      style={[styles.episodeItem, { backgroundColor: solidBackground }]} 
+      onPress={() => handleEpisodePress(item.id)}
+      activeOpacity={0.7}
+    >
+      <Image source={{ uri: item.thumbnail }} style={styles.episodeThumbnail} />
+      <View style={styles.episodeInfo}>
+        <Text style={[styles.episodeTitle, { color: text }]}>{item.title}</Text>
+        <Text style={[styles.episodeDuration, { color: textSecondary }]}>{item.duration}</Text>
+        <Text style={[styles.episodeDescription, { color: textSecondary }]} numberOfLines={2}>
+          {item.description}
+        </Text>
+      </View>
+      <TouchableOpacity 
+        style={styles.playButton}
+        onPress={() => handleEpisodePress(item.id)}
+      >
+        <Ionicons name="play-circle" size={36} color={primary} />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  // Show loading indicator while fetching show
+  if (loading.shows || !show) {
+    return (
+      <ThemedView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={primary} />
+        <ThemedText style={styles.loadingText}>Loading show details...</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  // Get the episodes from the show or use an empty array if not available
+  // Ensure seasonDetails exists and is an array before proceeding
+  const seasons = Array.isArray(show.seasonDetails) ? show.seasonDetails : [];
+  // Use optional chaining and provide fallback empty arrays to prevent undefined errors
+  const allEpisodes = seasons.length > 0 
+    ? seasons.flatMap(season => (season?.episodes || []))
+    : [];
+
+  return (
+    <ThemedView style={styles.container}>
+      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+      
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero Section with Cover Image */}
+        <View style={styles.heroContainer}>
+          <Image source={{ uri: show.coverUrl }} style={styles.coverImage} resizeMode="cover" />
+          
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.8)', background || '#000']}
+            style={styles.gradient}
+          >
+            {/* Back Button */}
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            
+            {/* Hero Content */}
+            <View style={styles.heroContent}>
+              <View style={styles.heroInfo}>
+                <Text style={styles.title}>{show.title}</Text>
+                
+                <View style={styles.metaInfo}>
+                  <Text style={styles.year}>{show.releaseYear}</Text>
+                  <Text style={styles.dot}>•</Text>
+                  <Text style={styles.rating}>{show.rating}</Text>
+                  <Text style={styles.dot}>•</Text>
+                  <Text style={styles.seasons}>{show.seasons} Seasons</Text>
+                </View>
+                
+                <View style={styles.genreContainer}>
+                  {show.genres.map((genre, index) => (
+                    <View key={index} style={[styles.genreTag, {borderColor: border}]}>
+                      <Text style={styles.genreText}>{genre}</Text>
+                    </View>
+                  ))}
+                </View>
+                
+                <View style={styles.ratingContainer}>
+                  <AntDesign name="star" size={16} color="#FFD700" />
+                  <Text style={styles.ratingText}>{show.starRating}</Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+        
+        {/* Action Buttons */}
+        <View style={[styles.actionButtons, {borderBottomColor: border}]}>
+          <TouchableOpacity style={styles.playNowButton} onPress={handlePlay}>
+            <Ionicons name="play" size={20} color="white" />
+            <Text style={styles.playNowText}>Play Now</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="add-outline" size={28} color={text} />
+            <Text style={[styles.actionText, {color: textSecondary}]}>My List</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="share-social-outline" size={28} color={text} />
+            <Text style={[styles.actionText, {color: textSecondary}]}>Share</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Description */}
+        <View style={[styles.descriptionContainer, {borderBottomColor: border}]}>
+          <ThemedText style={styles.descriptionText}>{show.description}</ThemedText>
+          <Text style={[styles.directorText, {color: textSecondary}]}>
+            Creator: <Text style={[styles.directorName, {color: text}]}>{show.creator ?? 'Unknown'}</Text>
+          </Text>
+          <Text style={[styles.directorText, {color: textSecondary, marginTop: 4}]}>
+            Network: <Text style={[styles.directorName, {color: text}]}>{show.network ?? 'Unknown'}</Text>
+          </Text>
+          <View style={styles.episodesInfo}>
+            <Text style={[styles.episodesText, {color: textSecondary}]}>
+              {show.seasons} Seasons • {allEpisodes.length} Episodes
+            </Text>
+          </View>
+        </View>
+        
+        {/* Cast */}
+        <View style={[styles.sectionContainer, {borderBottomColor: border}]}>
+          <Text style={[styles.sectionTitle, {color: text}]}>Cast</Text>
+          <FlatList
+            data={show.cast}
+            renderItem={renderCastItem}
+            keyExtractor={(item, index) => index.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.castList}
+          />
+        </View>
+        
+        {/* Tabs */}
+        <View style={[styles.tabsContainer, { borderBottomColor: border }]}>
+          <TouchableOpacity 
+            style={[
+              styles.tab, 
+              activeTab === 'Episodes' && { borderBottomWidth: 2, borderBottomColor: primary }
+            ]} 
+            onPress={() => setActiveTab('Episodes')}
+          >
+            <Text style={[
+              styles.tabText, 
+              { color: activeTab === 'Episodes' ? text : textSecondary }
+            ]}>
+              Episodes
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[
+              styles.tab, 
+              activeTab === 'More Like This' && { borderBottomWidth: 2, borderBottomColor: primary }
+            ]} 
+            onPress={() => setActiveTab('More Like This')}
+          >
+            <Text style={[
+              styles.tabText, 
+              { color: activeTab === 'More Like This' ? text : textSecondary }
+            ]}>
+              More Like This
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Tab Content */}
+        {activeTab === 'Episodes' ? (
+          <View style={styles.episodesContainer}>
+            {allEpisodes.length > 0 ? (
+              <FlatList
+                data={allEpisodes}
+                renderItem={renderEpisodeItem}
+                keyExtractor={item => item.id}
+              />
+            ) : (
+              <ThemedText style={{textAlign: 'center', marginTop: 20}}>
+                No episodes available.
+              </ThemedText>
+            )}
+          </View>
+        ) : (
+          <View style={styles.relatedContainer}>
+            {show.relatedShows && show.relatedShows.length > 0 ? (
+              <FlatList
+                data={show.relatedShows}
+                renderItem={renderRelatedItem}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                columnWrapperStyle={styles.relatedColumnWrapper}
+                scrollEnabled={false}
+              />
+            ) : (
+              <ThemedText style={{textAlign: 'center', marginTop: 20}}>
+                No related shows available.
+              </ThemedText>
+            )}
+          </View>
+        )}
+        
+        {/* Bottom Space */}
+        <View style={{ height: 20 }} />
+      </ScrollView>
+    </ThemedView>
+  );
 }
+
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+  },
+  loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  noContentText: {
+    padding: 20,
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  heroContainer: {
+    height: height * 0.65, // Increase height for a more immersive hero
+    width: '100%',
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  gradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'space-between',
+    paddingTop: 50,
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 16,
+    marginTop: 8,
+  },
+  heroContent: {
+    padding: 20,
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  heroInfo: {
+    width: '100%',
+  },
   title: {
-    fontSize: 24,
+    color: '#fff',
+    fontSize: 32, // Increased font size
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 12, // More spacing
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
+  },
+  metaInfo: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  year: {
+    color: '#ddd',
+    fontSize: 14,
+  },
+  dot: {
+    color: '#ddd',
+    marginHorizontal: 5,
+  },
+  rating: {
+    color: '#ddd',
+    fontSize: 14,
+  },
+  seasons: {
+    color: '#ddd',
+    fontSize: 14,
+  },
+  genreContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  genreTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  genreText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
+    color: '#fff',
+    marginLeft: 5,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+  },
+  playNowButton: {
+    backgroundColor: '#e50914',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    flex: 2,
+    marginRight: 15,
+  },
+  playNowText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 5,
+  },
+  actionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  actionText: {
+    marginTop: 5,
+    fontSize: 12,
+  },
+  descriptionContainer: {
+    padding: 20,
+    borderBottomWidth: 1,
+  },
+  descriptionText: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 10,
+  },
+  directorText: {
+    fontSize: 14,
+  },
+  directorName: {
+    fontWeight: '500',
+  },
+  episodesInfo: {
+    marginTop: 10,
+  },
+  episodesText: {
+    fontSize: 14,
+  },
+  sectionContainer: {
+    padding: 20,
+    borderBottomWidth: 1,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  castList: {
+    paddingRight: 10,
+  },
+  castItem: {
+    marginRight: 15,
+    width: 100,
+    alignItems: 'center',
+  },
+  castImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 8,
+  },
+  castName: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  characterName: {
+    color: '#aaa',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+  },
+  tab: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  tabText: {
+    fontWeight: '500',
+    fontSize: 16,
+  },
+  episodesContainer: {
+    padding: 15,
+  },
+  episodeItem: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  episodeThumbnail: {
+    width: 120,
+    height: 70,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  episodeInfo: {
+    flex: 1,
+    padding: 10,
+  },
+  episodeTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  episodeDuration: {
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  episodeDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  playButton: {
+    justifyContent: 'center',
+    padding: 10,
+  },
+  relatedContainer: {
+    padding: 15,
+  },
+  relatedColumnWrapper: {
+    justifyContent: 'space-between',
+  },
+  relatedItem: {
+    width: (width - 45) / 2,
+    marginBottom: 15,
+  },
+  relatedThumbnail: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  relatedTitle: {
+    fontSize: 14,
   },
 });

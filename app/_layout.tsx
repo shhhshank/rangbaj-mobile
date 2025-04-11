@@ -9,6 +9,9 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import Splash from '@/components/common/Splash';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Provider } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
+import { store, persistor } from '@/redux/store';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -34,16 +37,19 @@ export default function RootLayout() {
     <>
     {(!splashEnd) && (<Splash onAnimationEnd={() => {setSplashEnd(true)}}/>)}
     
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="content" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
-
-        </Stack>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="content" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+          </ThemeProvider>
+        </GestureHandlerRootView>
+      </PersistGate>
+    </Provider>
     </>
   );
 }
