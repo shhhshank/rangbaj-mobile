@@ -19,6 +19,17 @@ export interface RelatedContent {
   thumbnail: string;
 }
 
+// Trailer structure
+export interface Trailer {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  videoUrl: string;
+  duration: string;
+  releaseDate?: string;
+  description?: string;
+}
+
 // Episode structure
 export interface Episode {
   id: string;
@@ -26,6 +37,7 @@ export interface Episode {
   duration: string;
   thumbnail: string;
   description: string;
+  trailer?: Trailer;
 }
 
 // Base content interface for shared properties
@@ -47,6 +59,7 @@ export interface BaseContent {
   isNew?: boolean;
   isTrending?: boolean;
   isOriginal?: boolean;
+  trailers?: Trailer[];
 }
 
 // Movie specific interface
@@ -58,16 +71,25 @@ export interface Movie extends BaseContent {
 export interface Show extends BaseContent {
   seasons: number;
   episodes: Episode[];
+  seasonDetails?: {
+    number: number;
+    title: string;
+    episodes: Episode[];
+  }[];
+  creator?: string;
+  network?: string;
 }
 
 // Content state structure
 export interface ContentState {
   movies: { [key: string]: Movie };
   shows: { [key: string]: Show };
+  trailers: { [key: string]: Trailer };
   loading: {
     movies: boolean;
     shows: boolean;
     content: boolean;
+    trailers: boolean;
   };
   error: string | null;
   contentSections: {
@@ -76,6 +98,7 @@ export interface ContentState {
   filteredContent: {
     [key: string]: (Movie | Show)[];
   };
+  featuredTrailers: Trailer[];
 }
 
 // Content section for homepage

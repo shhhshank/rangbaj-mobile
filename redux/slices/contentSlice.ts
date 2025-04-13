@@ -1,72 +1,50 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { RootState } from '../store';
+import { Movie, Show, Trailer, ContentType, ContentSection as ContentSectionType } from '../types';
 
 // Mock data - to be replaced with API calls later
 import { movieData } from '../mock/movieData';
 import { showData } from '../mock/showData';
 
-export interface Movie {
-  id: string;
-  title: string;
-  description: string;
-  releaseYear: string;
-  rating: string;
-  duration: string;
-  genres: string[];
-  starRating: number;
-  thumbnailUrl: string;
-  coverUrl: string;
-  director: string;
-  studio: string;
-  cast: {
-    name: string;
-    character: string;
-    image: string;
-  }[];
-  relatedMovies?: {
-    id: string;
-    title: string;
-    thumbnail: string;
-  }[];
-}
-
-export interface Show {
-  id: string;
-  title: string;
-  description: string;
-  releaseYear: string;
-  rating: string;
-  seasons: number;
-  episodes: number;
-  genres: string[];
-  starRating: number;
-  thumbnailUrl: string;
-  coverUrl: string;
-  creator: string;
-  network: string;
-  cast: {
-    name: string;
-    character: string;
-    image: string;
-  }[];
-  relatedShows?: {
-    id: string;
-    title: string;
-    thumbnail: string;
-  }[];
-  seasonDetails?: {
-    number: number;
-    title: string;
-    episodes: {
-      id: string;
-      number: number;
-      title: string;
-      duration: string;
-      thumbnail: string;
-      description: string;
-    }[];
-  }[];
-}
+// Mock trailers data
+const trailersData: Trailer[] = [
+  {
+    id: '301',
+    title: 'Stellar Odyssey - Official Trailer',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1446941611757-91d2c3bd3d45?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    duration: '2:15',
+    description: 'The fate of the galaxy rests in the hands of unlikely heroes. Watch the official trailer for Stellar Odyssey.',
+    releaseDate: '2024-12-15'
+  },
+  {
+    id: '302',
+    title: 'Dark Matter - Season 2 Trailer',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1518544865063-3ddfd548df3a?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+    duration: '1:48',
+    description: 'The journey continues as our heroes face their greatest challenges yet.',
+    releaseDate: '2024-09-22'
+  },
+  {
+    id: '303',
+    title: 'Quantum Resonance - Teaser',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1506272517965-ec6133efee7a?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    duration: '0:45',
+    description: 'When reality breaks down, who can you trust? Coming this fall.',
+    releaseDate: '2024-10-05'
+  },
+  {
+    id: '304',
+    title: 'Galactic Horizon - Final Trailer',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1539717239864-491093663ae9?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    duration: '2:30',
+    description: 'The epic conclusion to the space saga that captivated audiences worldwide.',
+    releaseDate: '2024-11-18'
+  }
+];
 
 export interface ContentSection {
   title: string;
@@ -130,7 +108,15 @@ export const fetchMovie = createAsyncThunk(
       if (!movie) {
         throw new Error('Movie not found');
       }
-      return movie;
+      
+      // Add trailers to the movie (for demo purposes)
+      // In a real app, this would come from the API
+      const movieWithTrailers = {
+        ...movie,
+        trailers: [trailersData[0], trailersData[2]]
+      } as Movie;
+      
+      return movieWithTrailers;
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -145,7 +131,7 @@ export const fetchShow = createAsyncThunk(
       await new Promise(resolve => setTimeout(resolve, 300));
       
       // Fetch from mock data
-      const show = showData.find((s: Show) => s.id === showId);
+      const show = showData.find((s: any) => s.id === showId);
       if (!show) {
         throw new Error('Show not found');
       }
@@ -156,7 +142,9 @@ export const fetchShow = createAsyncThunk(
       const showWithSeasonDetails = {
         ...show,
         seasonDetails: Array.isArray(show.seasons) ? show.seasons : [],
-      };
+        // Add trailers to the show (for demo purposes)
+        trailers: [trailersData[1], trailersData[3]]
+      } as Show;
       
       console.log('Show with seasons:', showWithSeasonDetails.title, 'Seasons:', showWithSeasonDetails.seasonDetails?.length || 0);
       

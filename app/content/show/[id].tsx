@@ -10,7 +10,7 @@ import { ThemedView } from '@/components/common/ThemedView';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchShow, selectShowById, selectIsLoading } from '@/redux/slices/contentSlice';
 import { AppDispatch, RootState } from '@/redux/store';
-import { Show, CastMember, RelatedContent, Episode } from '@/redux/types';
+import { Show, CastMember, RelatedContent, Episode, Trailer } from '@/redux/types';
 
 export default function ShowContentScreen() {
   const { id } = useLocalSearchParams();
@@ -42,6 +42,24 @@ export default function ShowContentScreen() {
   const handlePlay = () => {
     console.log('Playing show:', id);
     // In a real app, navigate to video player or start playback
+  };
+  
+  // Handle trailer button press
+  const handleTrailerPress = () => {
+    // Check if show has trailers
+    if (show?.trailers && show.trailers.length > 0) {
+      // Navigate to trailer page
+      router.push({
+        pathname: `/trailers/[id]`,
+        params: { id: show.trailers[0].id }
+      });
+    } else {
+      // For demo, navigate to a sample trailer
+      router.push({
+        pathname: `/trailers/[id]`,
+        params: { id: '301' }  // Sample trailer ID
+      });
+    }
   };
   
   // Handle back button press
@@ -160,29 +178,37 @@ export default function ShowContentScreen() {
                 </View>
                 
                 <View style={styles.ratingContainer}>
-                  <AntDesign name="star" size={16} color="#FFD700" />
+                  <AntDesign name="star" size={18} color="#FFD700" />
                   <Text style={styles.ratingText}>{show.starRating}</Text>
                 </View>
+                
+                {/* Removed Trailer Badge */}
               </View>
             </View>
           </LinearGradient>
         </View>
         
         {/* Action Buttons */}
-        <View style={[styles.actionButtons, {borderBottomColor: border}]}>
-          <TouchableOpacity style={styles.playNowButton} onPress={handlePlay}>
-            <Ionicons name="play" size={20} color="white" />
+        <View style={[styles.actionButtons, { borderBottomColor: border }]}>
+          <TouchableOpacity 
+            style={[styles.playNowButton, { backgroundColor: primary }]} 
+            onPress={handlePlay}
+          >
+            <Ionicons name="play" size={20} color="#fff" />
             <Text style={styles.playNowText}>Play Now</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="add-outline" size={28} color={text} />
-            <Text style={[styles.actionText, {color: textSecondary}]}>My List</Text>
+          <TouchableOpacity 
+            style={[styles.trailerButton, { borderColor: textSecondary }]} 
+            onPress={handleTrailerPress}
+          >
+            <MaterialIcons name="movie" size={20} color={text} />
+            <Text style={[styles.trailerButtonText, { color: text }]}>Trailer</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="share-social-outline" size={28} color={text} />
-            <Text style={[styles.actionText, {color: textSecondary}]}>Share</Text>
+            <MaterialIcons name="add" size={26} color={text} />
+            <Text style={[styles.actionText, { color: textSecondary }]}>My List</Text>
           </TouchableOpacity>
         </View>
         
@@ -422,6 +448,21 @@ const styles = StyleSheet.create({
   },
   playNowText: {
     color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 5,
+  },
+  trailerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    borderWidth: 1,
+    flex: 1.5,
+    marginRight: 10,
+  },
+  trailerButtonText: {
     fontWeight: 'bold',
     marginLeft: 5,
   },

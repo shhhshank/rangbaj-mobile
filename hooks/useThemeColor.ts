@@ -7,8 +7,22 @@ import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
 
+export type ThemeColorName = 
+  | 'text' 
+  | 'textSecondary' 
+  | 'background' 
+  | 'primary' 
+  | 'solidBackground' 
+  | 'border' 
+  | 'tint' 
+  | 'icon' 
+  | 'tabIconDefault' 
+  | 'tabIconSelected' 
+  | 'borderSecondary'
+  | 'inputBackground';
+
 export function useThemeColor(
-  colorName: keyof typeof Colors.light & keyof typeof Colors.dark,
+  colorName: ThemeColorName,
   props?: { light?: string; dark?: string }
 ) {
 

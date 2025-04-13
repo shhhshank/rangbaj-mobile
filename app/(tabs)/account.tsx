@@ -1,62 +1,85 @@
-import { Text, View, StyleSheet, Image, TouchableOpacity, ScrollView, Switch, Dimensions } from "react-native";
+import React, { useState } from 'react';
+import { Text, View, StyleSheet, Image, TouchableOpacity, ScrollView, Switch, Dimensions, StatusBar } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { ThemedView } from '@/components/common/ThemedView';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import FloatingAlert from '@/components/common/FloatingAlert';
 
 // Mock user data
 const userData = {
   name: 'Rahul Sharma',
   email: 'rahul.sharma@example.com',
   avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
-  plan: 'Basic',
+  plan: 'Premium',
   watchlist: 14,
   downloads: 3,
 };
 
+// Define types for settings items
+type RoutePathType = string;
+
+interface SettingItem {
+  id: string;
+  title: string;
+  value: string | boolean | null;
+  type: 'toggle' | 'option' | 'link';
+  route?: RoutePathType;
+}
+
+interface SettingsSection {
+  title: string;
+  icon: string;
+  items: SettingItem[];
+}
+
 // Mock settings data
-const settingsSections = [
+const settingsSections: SettingsSection[] = [
   {
     title: 'Content Preferences',
     icon: 'film-outline',
     items: [
-      { id: 'language', title: 'Display Language', value: 'English', type: 'option' },
+      { id: 'language', title: 'Display Language', value: 'English', type: 'option', route: '/settings/language' },
       { id: 'subtitles', title: 'Subtitles', value: true, type: 'toggle' },
       { id: 'autoplay', title: 'Autoplay Previews', value: true, type: 'toggle' },
+      { id: 'notifications', title: 'Notifications', value: null, type: 'link', route: '/settings/notifications' },
     ]
   },
   {
     title: 'Playback',
     icon: 'play-circle-outline',
     items: [
-      { id: 'quality', title: 'Streaming Quality', value: 'Auto', type: 'option' },
-      { id: 'data', title: 'Data Saver', value: false, type: 'toggle' },
-      { id: 'download-quality', title: 'Download Quality', value: 'High', type: 'option' },
+      { id: 'quality', title: 'Streaming Quality', value: 'Auto', type: 'option', route: '/settings/quality' },
+      { id: 'data-usage', title: 'Data Usage', value: null, type: 'link', route: '/settings/data-usage' },
+      { id: 'download-quality', title: 'Download Quality', value: 'High', type: 'option', route: '/settings/quality' },
     ]
   },
   {
     title: 'Account',
     icon: 'person-circle-outline',
     items: [
-      { id: 'security', title: 'Security', value: null, type: 'link' },
-      { id: 'payment', title: 'Payment Details', value: null, type: 'link' },
-      { id: 'history', title: 'Billing History', value: null, type: 'link' },
+      { id: 'security', title: 'Security', value: null, type: 'link', route: '/settings/security' },
+      { id: 'payment', title: 'Payment & Subscription', value: null, type: 'link', route: '/settings/payment' },
+      { id: 'profile', title: 'Edit Profile', value: null, type: 'link' },
     ]
   },
   {
     title: 'About',
     icon: 'information-circle-outline',
     items: [
-      { id: 'help', title: 'Help & Support', value: null, type: 'link' },
+      { id: 'help', title: 'Help & Support', value: null, type: 'link', route: '/settings/help' },
       { id: 'terms', title: 'Terms & Conditions', value: null, type: 'link' },
       { id: 'privacy', title: 'Privacy Policy', value: null, type: 'link' },
     ]
   },
 ];
+
+interface SettingState {
+  id: string;
+  value: string | boolean;
+}
 
 export default function Account() {
   const router = useRouter();
@@ -68,11 +91,15 @@ export default function Account() {
   const solidBackground = useThemeColor('solidBackground');
   const insets = useSafeAreaInsets();
   
-  const [settings, setSettings] = useState(
+  const [settings, setSettings] = useState<SettingState[]>(
     settingsSections.flatMap(section => 
       section.items.map(item => ({ id: item.id, value: item.value !== null ? item.value : false }))
     )
   );
+
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'info' | 'warning' | 'error'>('success');
   
   const handleSettingChange = (id: string, value: any) => {
     setSettings(prev => 
@@ -80,13 +107,46 @@ export default function Account() {
         setting.id === id ? { ...setting, value } : setting
       )
     );
+
+    // Show a notification for toggle changes
+    const settingItem = settingsSections.flatMap(s => s.items).find(item => item.id === id);
+    if (settingItem && settingItem.type === 'toggle') {
+      setAlertMessage(`${settingItem.title} ${value ? 'enabled' : 'disabled'}`);
+      setAlertType('success');
+      setShowAlert(true);
+      
+      setTimeout(() => {
+        setShowAlert(false);
+      }, 2000);
+    }
   };
   
   const getSetting = (id: string) => {
     return settings.find(setting => setting.id === id)?.value;
   };
+
+  const handleSettingItemPress = (item: SettingItem) => {
+    if (item.route) {
+      router.push(item.route as any);
+    } else if (item.id === 'terms') {
+      setAlertMessage('Opening Terms & Conditions');
+      setAlertType('info');
+      setShowAlert(true);
+      setTimeout(() => setShowAlert(false), 2000);
+    } else if (item.id === 'privacy') {
+      setAlertMessage('Opening Privacy Policy');
+      setAlertType('info');
+      setShowAlert(true);
+      setTimeout(() => setShowAlert(false), 2000);
+    } else if (item.id === 'profile') {
+      setAlertMessage('Opening profile editor');
+      setAlertType('info');
+      setShowAlert(true);
+      setTimeout(() => setShowAlert(false), 2000);
+    }
+  };
   
-  const renderSettingItem = (item: any) => {
+  const renderSettingItem = (item: SettingItem) => {
     const value = getSetting(item.id);
     
     switch (item.type) {
@@ -101,41 +161,51 @@ export default function Account() {
         );
       case 'option':
         return (
-          <View style={styles.settingValue}>
+          <TouchableOpacity 
+            style={styles.settingValue}
+            onPress={() => handleSettingItemPress(item)}
+          >
             <Text style={[styles.settingValueText, { color: textSecondary }]}>{value}</Text>
             <Ionicons name="chevron-forward" size={20} color={textSecondary} />
-          </View>
+          </TouchableOpacity>
         );
       case 'link':
         return (
-          <Ionicons name="chevron-forward" size={20} color={textSecondary} />
+          <TouchableOpacity
+            onPress={() => handleSettingItemPress(item)}
+          >
+            <Ionicons name="chevron-forward" size={20} color={textSecondary} />
+          </TouchableOpacity>
         );
       default:
         return null;
     }
   };
   
-  const renderSettingsSection = (section: any, index: number) => {
+  const renderSettingsSection = (section: SettingsSection, index: number) => {
     return (
       <View key={section.title} style={styles.settingsSection}>
         <View style={styles.sectionHeader}>
-          <Ionicons name={section.icon} size={22} color={primary} />
+          <Ionicons name={section.icon as any} size={24} color={primary} />
           <Text style={[styles.sectionTitle, { color: text }]}>{section.title}</Text>
         </View>
         
-        <View style={[styles.sectionContent, { backgroundColor: solidBackground }]}>
-          {section.items.map((item: any, i: number) => (
-            <TouchableOpacity 
-              key={item.id}
-              style={[
-                styles.settingItem, 
-                i < section.items.length - 1 && { borderBottomWidth: 1, borderBottomColor: border }
-              ]}
-              onPress={() => item.type === 'link' && console.log(`Navigate to ${item.id}`)}
-            >
-              <Text style={[styles.settingLabel, { color: text }]}>{item.title}</Text>
-              {renderSettingItem(item)}
-            </TouchableOpacity>
+        <View style={[styles.sectionContent, { backgroundColor: solidBackground, borderColor: border }]}>
+          {section.items.map((item, i) => (
+            <React.Fragment key={item.id}>
+              <TouchableOpacity 
+                style={styles.settingItem}
+                onPress={() => item.type !== 'toggle' && handleSettingItemPress(item)}
+                activeOpacity={item.type === 'toggle' ? 1 : 0.7}
+              >
+                <Text style={[styles.settingLabel, { color: text }]}>{item.title}</Text>
+                {renderSettingItem(item)}
+              </TouchableOpacity>
+              
+              {i < section.items.length - 1 && (
+                <View style={[{ height: 1, backgroundColor: border }]} />
+              )}
+            </React.Fragment>
           ))}
         </View>
       </View>
@@ -144,38 +214,49 @@ export default function Account() {
   
   return (
     <ThemedView style={styles.container}>
-      <ExpoStatusBar style="light" />
+      <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
+      
+      <View style={[styles.headerContainer, { paddingTop: insets.top, backgroundColor: background }]}>
+        <Text style={[styles.screenTitle, { color: text }]}>Account</Text>
+      </View>
       
       <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={[
-          styles.scrollContent, 
-          { paddingTop: insets.top + 16 } // Use safe area insets for status bar
-        ]}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* User Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileInfo}>
-            <Image source={{ uri: userData.avatar }} style={styles.avatar} />
+            <Image 
+              source={{ uri: userData.avatar }}
+              style={styles.avatar}
+              resizeMode="cover"
+            />
             <View style={styles.userDetails}>
               <Text style={[styles.userName, { color: text }]}>{userData.name}</Text>
               <Text style={[styles.userEmail, { color: textSecondary }]}>{userData.email}</Text>
-              <View style={styles.planBadge}>
-                <Text style={styles.planText}>{userData.plan} Plan</Text>
+              <View style={[styles.planBadge, { backgroundColor: primary }]}>
+                <Text style={[styles.planText, { color: '#fff' }]}>{userData.plan}</Text>
               </View>
             </View>
           </View>
           
-          <TouchableOpacity style={styles.editProfileButton}>
-            <Feather name="edit-2" size={16} color={text} />
+          <TouchableOpacity 
+            style={[styles.editProfileButton, { backgroundColor: `${primary}15` }]}
+            onPress={() => {
+              setAlertMessage('Opening profile editor');
+              setAlertType('info');
+              setShowAlert(true);
+              setTimeout(() => setShowAlert(false), 2000);
+            }}
+          >
+            <Feather name="edit-2" size={16} color={primary} />
           </TouchableOpacity>
         </View>
         
-        {/* User Stats */}
-        <View style={[styles.statsContainer, { backgroundColor: solidBackground }]}>
+        <View style={[styles.statsContainer, { backgroundColor: solidBackground, borderColor: border }]}>
           <View style={styles.statItem}>
-            <Ionicons name="bookmark" size={22} color={primary} />
+            <Ionicons name="bookmark-outline" size={24} color={primary} />
             <Text style={[styles.statValue, { color: text }]}>{userData.watchlist}</Text>
             <Text style={[styles.statLabel, { color: textSecondary }]}>Watchlist</Text>
           </View>
@@ -183,70 +264,96 @@ export default function Account() {
           <View style={[styles.statDivider, { backgroundColor: border }]} />
           
           <View style={styles.statItem}>
-            <Ionicons name="download" size={22} color={primary} />
-            <Text style={[styles.statValue, { color: text }]}>{userData.downloads}</Text>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>Downloads</Text>
+            <Ionicons name="time-outline" size={24} color={primary} />
+            <Text style={[styles.statValue, { color: text }]}>48h</Text>
+            <Text style={[styles.statLabel, { color: textSecondary }]}>Watched</Text>
           </View>
           
           <View style={[styles.statDivider, { backgroundColor: border }]} />
           
           <View style={styles.statItem}>
-            <Ionicons name="heart" size={22} color={primary} />
-            <Text style={[styles.statValue, { color: text }]}>19</Text>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>Liked</Text>
+            <Ionicons name="download-outline" size={24} color={primary} />
+            <Text style={[styles.statValue, { color: text }]}>{userData.downloads}</Text>
+            <Text style={[styles.statLabel, { color: textSecondary }]}>Downloads</Text>
           </View>
         </View>
         
-        {/* Subscription Banner */}
-        <View style={styles.subscriptionContainer}>
-          <LinearGradient
-            colors={['rgba(255,71,87,0.7)', 'rgba(128,0,128,0.9)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.subscriptionBanner}
-          >
-            <View style={styles.subscriptionContent}>
-              <View>
-                <Text style={styles.subscriptionTitle}>Upgrade to Premium</Text>
-                <Text style={styles.subscriptionDescription}>
-                  Enjoy ad-free streaming, unlimited downloads, and exclusive content
-                </Text>
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.subscribeButton}
-                onPress={() => router.push('/subscriptions')}
-              >
-                <View style={styles.buttonContent}>
-                  <Ionicons name="diamond" size={18} color="#fff" />
-                  <Text style={styles.subscribeButtonText}>Subscribe</Text>
+        {userData.plan !== 'Premium' && (
+          <View style={styles.subscriptionContainer}>
+            <LinearGradient
+              colors={['#8E2DE2', '#4A00E0']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.subscriptionBanner}
+            >
+              <View style={styles.subscriptionContent}>
+                <View>
+                  <Text style={styles.subscriptionTitle}>Upgrade to Premium</Text>
+                  <Text style={styles.subscriptionDescription}>
+                    Enjoy ad-free streaming, Ultra HD quality, and offline downloads
+                  </Text>
                 </View>
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </View>
+                
+                <TouchableOpacity 
+                  style={styles.subscribeButton}
+                  onPress={() => {
+                    setAlertMessage('Opening Premium upgrade options');
+                    setAlertType('info');
+                    setShowAlert(true);
+                    setTimeout(() => setShowAlert(false), 2000);
+                  }}
+                >
+                  <View style={styles.buttonContent}>
+                    <Ionicons name="star" size={16} color="#fff" />
+                    <Text style={styles.subscribeButtonText}>Upgrade</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </View>
+        )}
         
-        {/* Settings Sections */}
         {settingsSections.map(renderSettingsSection)}
         
-        {/* Logout Button */}
         <TouchableOpacity 
-          style={[styles.logoutButton, { borderColor: border }]}
-          onPress={() => console.log('Logout')}
+          style={[styles.logoutButton, { borderColor: '#EF4444' }]}
+          onPress={() => {
+            setAlertMessage('You have been signed out');
+            setAlertType('info');
+            setShowAlert(true);
+            setTimeout(() => setShowAlert(false), 2000);
+          }}
         >
-          <Ionicons name="log-out-outline" size={22} color="tomato" />
-          <Text style={[styles.logoutText, { color: 'tomato' }]}>Log Out</Text>
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Text style={[styles.logoutText, { color: '#EF4444' }]}>Sign Out</Text>
         </TouchableOpacity>
         
-        <Text style={[styles.versionText, { color: textSecondary }]}>Version 1.0.0 (51)</Text>
+        <Text style={[styles.versionText, { color: textSecondary }]}>
+          Version 1.0.0
+        </Text>
         
-        {/* Company Info */}
         <View style={styles.companyContainer}>
+          <LinearGradient
+            colors={['#8E2DE2', '#4A00E0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.logoContainer}
+          >
+            <Text style={styles.logoText}>R</Text>
+          </LinearGradient>
           <Text style={[styles.companyText, { color: textSecondary }]}>
             Built by MNSA Technologies
           </Text>
         </View>
       </ScrollView>
+
+      <FloatingAlert
+        visible={showAlert}
+        type={alertType}
+        message={alertMessage}
+        duration={2000}
+        onClose={() => setShowAlert(false)}
+      />
     </ThemedView>
   );
 }
@@ -257,11 +364,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   profileSection: {
     flexDirection: 'row',
@@ -292,14 +411,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   planBadge: {
-    backgroundColor: '#9b59b6',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
     alignSelf: 'flex-start',
   },
   planText: {
-    color: '#fff',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -307,7 +424,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(150, 150, 150, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -351,33 +467,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   subscriptionTitle: {
-    color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 6,
   },
   subscriptionDescription: {
-    color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 13,
     maxWidth: width * 0.55,
   },
   subscribeButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 24,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   subscribeButtonText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontWeight: '600',
     fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   settingsSection: {
     marginBottom: 24,
@@ -425,9 +536,9 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   logoutText: {
-    marginLeft: 8,
     fontSize: 16,
     fontWeight: '500',
+    marginLeft: 8,
   },
   versionText: {
     textAlign: 'center',
@@ -447,7 +558,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   logoText: {
-    color: 'white',
     fontSize: 22,
     fontWeight: 'bold',
     letterSpacing: 2,

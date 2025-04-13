@@ -101,10 +101,38 @@ const paymentMethods = [
   { id: 'netbanking', name: 'Net Banking', icon: 'university' },
 ];
 
+// Mock saved payment methods
+const savedPaymentMethods = [
+  {
+    id: 'card1',
+    type: 'visa',
+    last4: '4242',
+    expiry: '05/26',
+    isDefault: true,
+  },
+  {
+    id: 'card2',
+    type: 'mastercard',
+    last4: '8439',
+    expiry: '11/25',
+    isDefault: false,
+  },
+  {
+    id: 'upi1',
+    type: 'upi',
+    details: 'user@ybl',
+    isDefault: false,
+  }
+];
+
 export default function SubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<string>('standard');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [selectedPayment, setSelectedPayment] = useState<string>('card');
+  const [savedMethods, setSavedMethods] = useState(savedPaymentMethods);
+  const [selectedSavedMethod, setSelectedSavedMethod] = useState<string>(
+    savedPaymentMethods.find(method => method.isDefault)?.id || savedPaymentMethods[0]?.id || ''
+  );
 
   const router = useRouter();
   const background = useThemeColor('background');
@@ -124,6 +152,10 @@ export default function SubscriptionScreen() {
 
   const handleSelectPayment = (id: string) => {
     setSelectedPayment(id);
+  };
+
+  const handleSelectSavedMethod = (id: string) => {
+    setSelectedSavedMethod(id);
   };
 
   const getDiscountedPrice = (price: string): string => {
@@ -327,28 +359,114 @@ export default function SubscriptionScreen() {
     );
   };
 
+  const renderCardIcon = (type: string) => {
+    switch (type) {
+      case 'visa':
+        return <FontAwesome5 name="cc-visa" size={24} color="#1A1F71" />;
+      case 'mastercard':
+        return <FontAwesome5 name="cc-mastercard" size={24} color="#EB001B" />;
+      case 'upi':
+        return <MaterialIcons name="smartphone" size={24} color={primary} />;
+      default:
+        return <FontAwesome5 name="credit-card" size={24} color={text} />;
+    }
+  };
+
   const renderPaymentMethods = () => {
     return (
       <View style={styles.paymentMethodsContainer}>
         <Text style={[styles.sectionTitle, { color: text }]}>Payment Method</Text>
         
-        {paymentMethods.map(method => (
-          <TouchableOpacity
-            key={method.id}
-            style={[
-              styles.paymentOption,
-              { backgroundColor: secondaryBackground },
-              selectedPayment === method.id && { borderColor: primary, borderWidth: 1 }
-            ]}
-            onPress={() => handleSelectPayment(method.id)}
-          >
-            <FontAwesome5 name={method.icon} size={20} color={text} />
-            <Text style={[styles.paymentOptionText, { color: text }]}>{method.name}</Text>
-            {selectedPayment === method.id && (
-              <Ionicons name="checkmark-circle" size={20} color={primary} />
-            )}
-          </TouchableOpacity>
-        ))}
+        {savedMethods.length > 0 ? (
+          <View style={[styles.paymentMethodsList, { backgroundColor: secondaryBackground, borderColor: border }]}>
+            {savedMethods.map((method, index) => (
+              <React.Fragment key={method.id}>
+                <TouchableOpacity
+                  style={[
+                    styles.savedMethodItem,
+                    { backgroundColor: selectedSavedMethod === method.id ? `${primary}10` : 'transparent' }
+                  ]}
+                  onPress={() => handleSelectSavedMethod(method.id)}
+                >
+                  <View style={styles.methodIconContainer}>
+                    {renderCardIcon(method.type)}
+                  </View>
+                  <View style={styles.methodDetails}>
+                    <View style={styles.methodHeader}>
+                      <Text style={[styles.methodTitle, { color: text }]}>
+                        {method.type.charAt(0).toUpperCase() + method.type.slice(1)}
+                        {method.type !== 'upi' ? ` ••••${method.last4}` : ` (${method.details})`}
+                      </Text>
+                      {method.isDefault && (
+                        <Text style={[styles.defaultBadge, { color: primary }]}>Default</Text>
+                      )}
+                    </View>
+                    {method.type !== 'upi' && (
+                      <Text style={[styles.methodExpiry, { color: textSecondary }]}>
+                        Expires {method.expiry}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={[
+                    styles.methodRadio,
+                    { 
+                      borderColor: selectedSavedMethod === method.id ? primary : border,
+                      backgroundColor: selectedSavedMethod === method.id ? primary : 'transparent'
+                    }
+                  ]}>
+                    {selectedSavedMethod === method.id && (
+                      <View style={styles.methodRadioInner} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+                {index < savedMethods.length - 1 && (
+                  <View style={[styles.methodDivider, { backgroundColor: border }]} />
+                )}
+              </React.Fragment>
+            ))}
+            
+            <TouchableOpacity 
+              style={[styles.addNewMethod, { borderTopColor: border }]}
+              onPress={() => {
+                // Navigation to add payment method would go here
+                // For now, we'll just log to console
+                console.log('Add new payment method');
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={primary} />
+              <Text style={[styles.addNewMethodText, { color: primary }]}>
+                Add New Payment Method
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[styles.paymentOptions, { backgroundColor: secondaryBackground, borderColor: border }]}>
+            {paymentMethods.map((method, index) => (
+              <TouchableOpacity
+                key={method.id}
+                style={[
+                  styles.paymentOption,
+                  { backgroundColor: selectedPayment === method.id ? `${primary}15` : 'transparent' }
+                ]}
+                onPress={() => handleSelectPayment(method.id)}
+              >
+                <FontAwesome5 name={method.icon as any} size={20} color={primary} />
+                <Text style={[styles.paymentOptionText, { color: text }]}>{method.name}</Text>
+                <View style={[
+                  styles.radioButton,
+                  { 
+                    borderColor: selectedPayment === method.id ? primary : border,
+                    backgroundColor: selectedPayment === method.id ? primary : 'transparent'
+                  }
+                ]}>
+                  {selectedPayment === method.id && (
+                    <View style={styles.radioInner} />
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     );
   };
@@ -400,7 +518,7 @@ export default function SubscriptionScreen() {
         {renderPaymentMethods()}
         
         {/* Checkout Summary */}
-        <View style={[styles.checkoutSummary, { backgroundColor: secondaryBackground }]}>
+        <View style={[styles.checkoutSummary, { backgroundColor: secondaryBackground, borderColor: border }]}>
           <View style={styles.summaryInfo}>
             <Text style={[styles.summaryTitle, { color: text }]}>Summary</Text>
             <View style={styles.summaryRow}>
@@ -640,6 +758,26 @@ const styles = StyleSheet.create({
     marginLeft: 16,
     fontSize: 16,
   },
+  paymentOptions: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    marginBottom: 24,
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#fff',
+  },
   checkoutSummary: {
     margin: 20,
     borderRadius: 12,
@@ -700,5 +838,73 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 4,
+  },
+  // Payment method styles
+  methodIconContainer: {
+    width: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  savedMethodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  methodDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  methodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  methodTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  defaultBadge: {
+    fontSize: 12,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  methodExpiry: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  methodRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  methodRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#fff',
+  },
+  methodDivider: {
+    height: 1,
+    marginLeft: 68,
+  },
+  addNewMethod: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  addNewMethodText: {
+    marginLeft: 10,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  paymentMethodsList: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    marginBottom: 24,
   },
 });

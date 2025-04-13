@@ -31,7 +31,8 @@ import {
   fetchShow
 } from '@/redux/slices/contentSlice';
 import { AppDispatch, RootState } from '@/redux/store';
-import { Movie, Show } from '@/redux/types';
+import { Movie, Show, Trailer } from '@/redux/types';
+import TrailerSection from '@/components/trailers/TrailerSection';
 
 // Continue watching mock data (to be replaced with actual API in the future)
 const continueWatchingData = [
@@ -70,6 +71,46 @@ const myListData = [
   { id: '202', title: 'Solar Wind', image: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=400&auto=format&fit=crop', type: 'show' },
   { id: '203', title: 'Galactic Horizon', image: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=400&auto=format&fit=crop', type: 'movie' },
   { id: '204', title: 'Cosmic Dawn', image: 'https://images.unsplash.com/photo-1484589065579-248aad0d8b13?w=400&auto=format&fit=crop', type: 'show' },
+];
+
+// Mock trailers data
+const trailersData: Trailer[] = [
+  {
+    id: '301',
+    title: 'Stellar Odyssey - Official Trailer',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1446941611757-91d2c3bd3d45?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    duration: '2:15',
+    description: 'The fate of the galaxy rests in the hands of unlikely heroes. Watch the official trailer for Stellar Odyssey.',
+    releaseDate: '2024-12-15'
+  },
+  {
+    id: '302',
+    title: 'Dark Matter - Season 2 Trailer',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1518544865063-3ddfd548df3a?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+    duration: '1:48',
+    description: 'The journey continues as our heroes face their greatest challenges yet.',
+    releaseDate: '2024-09-22'
+  },
+  {
+    id: '303',
+    title: 'Quantum Resonance - Teaser',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1506272517965-ec6133efee7a?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    duration: '0:45',
+    description: 'When reality breaks down, who can you trust? Coming this fall.',
+    releaseDate: '2024-10-05'
+  },
+  {
+    id: '304',
+    title: 'Galactic Horizon - Final Trailer',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1539717239864-491093663ae9?w=400&auto=format&fit=crop',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    duration: '2:30',
+    description: 'The epic conclusion to the space saga that captivated audiences worldwide.',
+    releaseDate: '2024-11-18'
+  }
 ];
 
 // Continue watching item component
@@ -386,6 +427,21 @@ export default function HomeScreen() {
           <View style={styles.spacer} />
           
           <View style={styles.mainContent}>
+            {/* Trailers Section */}
+            <TrailerSection
+              title="Latest Trailers"
+              trailers={trailersData}
+              trailerSize="medium"
+              onTrailerPress={(trailer) => {
+                console.log(`Playing trailer: ${trailer.title}`);
+                // Navigate to trailer player screen using correct Expo Router syntax
+                router.push({
+                  pathname: `/trailers/[id]`,
+                  params: { id: trailer.id }
+                });
+              }}
+            />
+            
             {/* Continue Watching (mock data) */}
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
