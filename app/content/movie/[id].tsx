@@ -40,7 +40,7 @@ export default function MovieContentScreen() {
   // Handle play button press
   const handlePlay = () => {
     console.log('Playing movie:', id);
-    // In a real app, navigate to video player or start playback
+    router.push(`/content/${id}`);
   };
 
   // Handle trailer button press

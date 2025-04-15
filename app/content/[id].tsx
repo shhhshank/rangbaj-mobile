@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Text, ViewProps, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Text, ViewProps, Dimensions, StatusBar } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useThemeColor } from '@/hooks/useThemeColor';
@@ -8,6 +8,7 @@ import { useFocusEffect, useNavigation, useLocalSearchParams } from 'expo-router
 import useBackPressed from '@/hooks/useBackPressed';
 import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { Modal, ScrollView, Switch } from 'react-native';
 
 export default function ContentPlayerScreen() {
   const video = useRef<Video>(null);
@@ -24,7 +25,7 @@ export default function ContentPlayerScreen() {
   const mockContent = {
     title: "The Universe's Edge",
     description: "A journey beyond the known universe reveals secrets that challenge our understanding of reality.",
-    source: "https://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4",
+    source: "https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8?ref=developerinsider.co",
   };
 
   // Use theme colors
@@ -82,6 +83,13 @@ export default function ContentPlayerScreen() {
     
     if ('isLoaded' in status && status.isLoaded) {
       setIsBuffering(status.isBuffering);
+      // For HLS, we should also check if we have enough buffered content
+      if (status.durationMillis && status.playableDurationMillis) {
+        const bufferRatio = status.playableDurationMillis / status.durationMillis;
+        if (bufferRatio > 0.1) { // If we have at least 10% buffered
+          setIsBuffering(false);
+        }
+      }
     } else if ('error' in status) {
       setError(status.error || 'An error occurred while playing the video');
     }
@@ -120,6 +128,14 @@ export default function ContentPlayerScreen() {
 
     run();
   });
+
+  // Hide status bar for full-screen experience
+  useEffect(() => {
+    StatusBar.setHidden(true);
+    return () => {
+      StatusBar.setHidden(false);
+    };
+  }, []);
 
   // Seek forward/backward
   const seekForward = async () => {
@@ -237,6 +253,152 @@ export default function ContentPlayerScreen() {
     );
   };
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Video quality options
+  const qualityOptions = [
+    { label: 'Auto', value: 'auto' },
+    { label: '1080p', value: '1080p' },
+    { label: '720p', value: '720p' },
+    { label: '480p', value: '480p' },
+    { label: '360p', value: '360p' },
+  ];
+
+  // Audio language options
+  const audioOptions = [
+    { label: 'English', value: 'en' },
+    { label: 'Hindi', value: 'hi' },
+    { label: 'Tamil', value: 'ta' },
+    { label: 'Telugu', value: 'te' },
+  ];
+
+  // Subtitle language options
+  const subtitleOptions = [
+    { label: 'English', value: 'en' },
+    { label: 'Hindi', value: 'hi' },
+    { label: 'Tamil', value: 'ta' },
+    { label: 'Telugu', value: 'te' },
+    { label: 'None', value: 'none' },
+  ];
+
+  const SettingsModal = () => {
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isSettingsOpen}
+        onRequestClose={() => setIsSettingsOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: background }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: text }]}>Playback Settings</Text>
+              <TouchableOpacity onPress={() => setIsSettingsOpen(false)}>
+                <Ionicons name="close-outline" size={24} color={text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              {/* Video Quality */}
+              <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Video Quality</Text>
+                <View style={styles.optionContainer}>
+                  {qualityOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.optionButton,
+                        styles.qualityOption,
+                        { backgroundColor: option.value === 'auto' ? primary : textSecondary },
+                      ]}
+                      onPress={() => {
+                        // Handle quality change
+                      }}
+                    >
+                      <Text>{option.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Audio Language */}
+              <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Audio Language</Text>
+                <View style={styles.optionContainer}>
+                  {audioOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.optionButton,
+                        { backgroundColor: option.value === 'en' ? primary : textSecondary },
+                      ]}
+                      onPress={() => {
+                        // Handle audio language change
+                      }}
+                    >
+                      <Text>{option.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Subtitle Language */}
+              <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Subtitle Language</Text>
+                <View style={styles.optionContainer}>
+                  {subtitleOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.optionButton,
+                        { backgroundColor: option.value === 'en' ? primary : textSecondary },
+                      ]}
+                      onPress={() => {
+                        // Handle subtitle language change
+                      }}
+                    >
+                      <Text>{option.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Subtitle Toggle */}
+              <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Subtitles</Text>
+                <View style={styles.toggleContainer}>
+                  <Switch
+                    value={true}
+                    onValueChange={() => {
+                      // Handle subtitle toggle
+                    }}
+                    trackColor={{ false: textSecondary, true: primary }}
+                    thumbColor={primary}
+                  />
+                </View>
+              </View>
+
+              {/* Picture-in-Picture */}
+              <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Picture-in-Picture</Text>
+                <View style={styles.toggleContainer}>
+                  <Switch
+                    value={true}
+                    onValueChange={() => {
+                      // Handle PiP toggle
+                    }}
+                    trackColor={{ false: textSecondary, true: primary }}
+                    thumbColor={primary}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <GestureDetector gesture={pinch}>
       <View style={[styles.container, { backgroundColor: background }]}>
@@ -282,6 +444,13 @@ export default function ContentPlayerScreen() {
           )}
 
           <VideoController />
+        </TouchableOpacity>
+        <SettingsModal />
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setIsSettingsOpen(true)}
+        >
+          <Ionicons name="settings-outline" size={24} color={text} />
         </TouchableOpacity>
       </View>
     </GestureDetector>
@@ -414,5 +583,60 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    maxHeight: '80%',
+  },
+  settingItem: {
+    marginBottom: 24,
+  },
+  settingLabel: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  optionContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  optionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  qualityOption: {
+    minWidth: 80,
+  }
+  ,
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsButton: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    padding: 8,
   },
 });

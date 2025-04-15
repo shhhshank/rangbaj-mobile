@@ -141,6 +141,15 @@ export default function LoginScreen() {
     }
   };
   
+  const handleSkipLogin = async () => {
+    try {
+      await AsyncStorage.setItem('skipLogin', 'true');
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Error skipping login:', error);
+    }
+  };
+
   const isValidEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -252,6 +261,13 @@ export default function LoginScreen() {
             ) : (
               <Text style={styles.loginButtonText}>Sign In</Text>
             )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleSkipLogin}
+          >
+            <Text style={styles.skipButtonText}>Skip Login</Text>
           </TouchableOpacity>
           
           <View style={styles.socialLoginContainer}>
@@ -396,6 +412,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  skipButton: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    color: '#888',
+    fontSize: 16,
   },
   socialLoginContainer: {
     alignItems: 'center',

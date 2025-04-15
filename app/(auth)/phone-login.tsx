@@ -257,6 +257,15 @@ export default function PhoneLoginScreen() {
     setTimer(0);
   };
 
+  const handleSkipLogin = async () => {
+    try {
+      await AsyncStorage.setItem('skipLogin', 'true');
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Error skipping login:', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -328,6 +337,13 @@ export default function PhoneLoginScreen() {
                   ) : (
                     <Text style={styles.actionButtonText}>Send OTP</Text>
                   )}
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.skipButton}
+                  onPress={handleSkipLogin}
+                >
+                  <Text style={styles.skipButtonText}>Skip Login</Text>
                 </TouchableOpacity>
                 
                 <View style={styles.infoContainer}>
@@ -589,6 +605,14 @@ const styles = StyleSheet.create({
   },
   resendTextDisabled: {
     color: 'rgba(255,255,255,0.5)',
+  },
+  skipButton: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    color: '#888',
+    fontSize: 16,
   },
   footerContainer: {
     alignItems: 'center',
