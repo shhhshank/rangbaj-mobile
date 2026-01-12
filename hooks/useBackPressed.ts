@@ -8,12 +8,12 @@ export default function useBackPressed(onGoBackCallback: () => boolean | null | 
   const navigation = useNavigation();
 
   useEffect(() => {
-    BackHandler.addEventListener('hardwareBackPress', onGoBackCallback);
-    navigation.addListener('blur', onGoBackCallback);
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onGoBackCallback);
+    const unsubscribe = navigation.addListener('blur', onGoBackCallback);
 
     return () => {
-      BackHandler.removeEventListener('hardwareBackPress', onGoBackCallback);
-      navigation.removeListener('blur', onGoBackCallback);
+      backHandler.remove();
+      unsubscribe();
     };
   }, [navigation, onGoBackCallback, deps]);
 }

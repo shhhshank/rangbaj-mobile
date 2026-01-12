@@ -1,6 +1,9 @@
 {
   "build": {
     "preview": {
+      "env": {
+        "NODE_ENV": "production"
+      },
       "android": {
         "buildType": "apk"
       }

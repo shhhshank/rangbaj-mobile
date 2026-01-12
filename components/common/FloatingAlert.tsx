@@ -63,13 +63,17 @@ export const FloatingAlert: React.FC<FloatingAlertProps> = ({
 }) => {
   const translateY = useRef(new Animated.Value(position === 'top' ? -100 : 100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const isCurrentlyVisible = useRef(false);
   
   const { background: alertColor, icon } = getAlertColors(type);
 
   useEffect(() => {
-    let hideTimeout: NodeJS.Timeout;
+    let hideTimeout: ReturnType<typeof setTimeout>;
     
-    if (visible) {
+    if (visible && !isCurrentlyVisible.current) {
+      // Only animate if transitioning from hidden to visible
+      isCurrentlyVisible.current = true;
+      
       // Reset animation values if they were changed
       translateY.setValue(position === 'top' ? -100 : 100);
       opacity.setValue(0);
@@ -98,7 +102,10 @@ export const FloatingAlert: React.FC<FloatingAlertProps> = ({
           }
         }, duration);
       }
-    } else {
+    } else if (!visible && isCurrentlyVisible.current) {
+      // Only animate if transitioning from visible to hidden
+      isCurrentlyVisible.current = false;
+      
       // Hide animation
       Animated.parallel([
         Animated.timing(translateY, {

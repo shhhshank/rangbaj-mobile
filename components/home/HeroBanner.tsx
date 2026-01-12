@@ -7,13 +7,15 @@ import {
   TouchableOpacity, 
   Dimensions, 
   Platform,
-  Animated
+  Animated,
+  ActivityIndicator,
+  AppState
 } from 'react-native';
-import { Video } from 'expo-av';
+import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useThemeColor } from '@/hooks/useThemeColor';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { HEADER_HEIGHT } from '@/components/common/Header';
 
 // Types for the featured content
@@ -22,7 +24,7 @@ export interface FeaturedContent {
   title: string;
   description: string;
   thumbnailUrl: string;
-  previewUrl: string | null;
+  videoUrl: string | null;
   year: string;
   maturityRating: string;
   duration: string;
@@ -35,17 +37,22 @@ export interface FeaturedContent {
 
 interface HeroBannerProps {
   featured: FeaturedContent;
-  onPlay: (id: string, type: 'movie' | 'show') => void;
-  onAddToList: (id: string) => void;
   onInfoPress: (id: string, type: 'movie' | 'show') => void;
+  isVisible?: boolean; // For scroll-based pause/resume
+  onVideoEnd?: () => void; // Callback when video ends
 }
 
 const { width, height } = Dimensions.get('window');
+const HERO_HEIGHT = Math.round(width * 9 / 16);
 
-const HeroBanner = ({ featured, onPlay, onAddToList, onInfoPress }: HeroBannerProps) => {
+const HeroBanner = ({ featured, onInfoPress, isVisible = true, onVideoEnd }: HeroBannerProps) => {
   const videoRef = useRef<Video>(null);
-  const [isPreviewReady, setIsPreviewReady] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(true);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const router = useRouter();
 
@@ -54,65 +61,187 @@ const HeroBanner = ({ featured, onPlay, onAddToList, onInfoPress }: HeroBannerPr
   const textSecondary = useThemeColor('textSecondary');
   const primary = useThemeColor('primary');
 
-  // Load and play video preview after component mounts
+  // Load and play video after component mounts
   useEffect(() => {
-    if (featured.previewUrl) {
-      setIsPreviewReady(true);
-      
-      // Fade in the video once it's loaded
-      const fadeIn = () => {
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }).start();
-      };
-
-      // Wait a bit before starting the preview to ensure UI is ready
-      const timer = setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.playAsync();
-          fadeIn();
-        }
-      }, 1500);
-
-      return () => {
-        clearTimeout(timer);
-        if (videoRef.current) {
-          videoRef.current.stopAsync();
-        }
-      };
+    if (featured.videoUrl) {
+      console.log('🎥 [HeroBanner] Video URL available:', featured.videoUrl);
+      setIsVideoReady(true);
+      setVideoError(false);
+      setIsBuffering(true);
+    } else {
+      console.log('⚠️ [HeroBanner] No video URL, showing thumbnail');
+      setIsVideoReady(false);
     }
-  }, [featured]);
 
-  const handlePlayPress = () => {
-    onPlay(featured.id, featured.type);
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.stopAsync().catch(() => {});
+      }
+    };
+  }, [featured.videoUrl]);
+
+  // Handle scroll-based pause/resume
+  useEffect(() => {
+    if (!videoRef.current || !isVideoReady || videoError) return;
+
+    if (isVisible && isPlaying) {
+      console.log('▶️ [HeroBanner] Resuming video (visible)');
+      videoRef.current.playAsync().catch((err) => {
+        console.error('Error resuming video:', err);
+      });
+    } else if (!isVisible) {
+      console.log('⏸️ [HeroBanner] Pausing video (not visible)');
+      videoRef.current.pauseAsync().catch((err) => {
+        console.error('Error pausing video:', err);
+      });
+    }
+  }, [isVisible, isPlaying, isVideoReady, videoError]);
+
+  // Handle app state changes (background/foreground)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        // App is going to background or becoming inactive
+        if (videoRef.current && isVideoReady && !videoError) {
+          console.log('⏸️ [HeroBanner] Pausing video (app backgrounded)');
+          videoRef.current.pauseAsync().catch((err) => {
+            console.error('Error pausing video on background:', err);
+          });
+        }
+      } else if (nextAppState === 'active') {
+        // App is coming to foreground
+        if (videoRef.current && isVideoReady && !videoError && isVisible) {
+          console.log('▶️ [HeroBanner] Resuming video (app foregrounded)');
+          videoRef.current.playAsync().catch((err) => {
+            console.error('Error resuming video on foreground:', err);
+          });
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isVideoReady, videoError, isVisible]);
+
+  // Handle screen focus/blur (tab changes, navigation)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Screen is focused - resume video if conditions are met
+      if (videoRef.current && isVideoReady && !videoError && isVisible) {
+        console.log('▶️ [HeroBanner] Resuming video (screen focused)');
+        videoRef.current.playAsync().catch((err) => {
+          console.error('Error resuming video on focus:', err);
+        });
+      }
+
+      // Cleanup function - called when screen loses focus
+      return () => {
+        if (videoRef.current && isVideoReady && !videoError) {
+          console.log('⏸️ [HeroBanner] Pausing video (screen blurred)');
+          videoRef.current.pauseAsync().catch((err) => {
+            console.error('Error pausing video on blur:', err);
+          });
+        }
+      };
+    }, [isVideoReady, videoError, isVisible])
+  );
+
+  // Fade in video when it loads
+  const handleVideoLoad = () => {
+    console.log('✅ [HeroBanner] Video loaded successfully');
+    setVideoLoaded(true);
+    setIsBuffering(false);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Handle playback status updates
+  const handlePlaybackStatusUpdate = (status: any) => {
+    if (status.isLoaded) {
+      setIsBuffering(status.isBuffering);
+      setIsPlaying(status.isPlaying);
+      
+      // Check if video has ended
+      if (status.didJustFinish && !status.isLooping && onVideoEnd) {
+        console.log('🎬 [HeroBanner] Video ended, triggering callback');
+        onVideoEnd();
+      }
+    }
+  };
+
+  // Handle video tap to play/pause
+  const handleVideoTap = async () => {
+    if (!videoRef.current || videoError) return;
+
+    try {
+      if (isPlaying) {
+        await videoRef.current.pauseAsync();
+        console.log('⏸️ [HeroBanner] Video paused by user');
+      } else {
+        await videoRef.current.playAsync();
+        console.log('▶️ [HeroBanner] Video resumed by user');
+      }
+    } catch (error) {
+      console.error('Error toggling play/pause:', error);
+    }
   };
 
   const handleInfoPress = () => {
     onInfoPress(featured.id, featured.type);
   };
 
-  const handleAddToListPress = () => {
-    onAddToList(featured.id);
+  const handleMuteToggle = () => {
+    setIsMuted(!isMuted);
   };
 
   return (
     <View style={styles.container}>
-      {isPreviewReady && featured.previewUrl ? (
-        <Animated.View style={[styles.videoContainer, { opacity: fadeAnim }]}>
-          <Video
-            ref={videoRef}
-            style={styles.video}
-            source={{ uri: featured.previewUrl }}
-            resizeMode="cover"
-            isLooping
-            isMuted={true}
-            shouldPlay={false}
-            onLoad={() => setVideoLoaded(true)}
-            onError={() => setIsPreviewReady(false)}
-          />
-        </Animated.View>
+      {/* Video or Thumbnail */}
+      {isVideoReady && featured.videoUrl && !videoError ? (
+        <TouchableOpacity 
+          activeOpacity={1} 
+          onPress={handleVideoTap}
+          style={styles.videoContainer}
+        >
+          <Animated.View style={[styles.videoContainer, { opacity: fadeAnim }]}>
+            <Video
+              ref={videoRef}
+              style={styles.video}
+              source={{ uri: featured.videoUrl }}
+              resizeMode={ResizeMode.COVER}
+              isLooping={!onVideoEnd} // Only loop if no onVideoEnd callback (single banner)
+              isMuted={isMuted}
+              shouldPlay={true}
+              onLoad={handleVideoLoad}
+              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+              onError={(error) => {
+                console.error('❌ [HeroBanner] Video playback error:', error);
+                setVideoError(true);
+                setIsVideoReady(false);
+                setIsBuffering(false);
+              }}
+            />
+          </Animated.View>
+
+          {/* Loading Indicator */}
+          {isBuffering && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#fff" />
+              <Text style={styles.loadingText}>Loading preview...</Text>
+            </View>
+          )}
+
+          {/* Play/Pause Indicator (shows briefly on tap) */}
+          {!isPlaying && !isBuffering && (
+            <View style={styles.playPauseOverlay}>
+              <Ionicons name="play-circle" size={80} color="rgba(255,255,255,0.9)" />
+            </View>
+          )}
+        </TouchableOpacity>
       ) : (
         <Image 
           source={{ uri: featured.thumbnailUrl }} 
@@ -121,92 +250,45 @@ const HeroBanner = ({ featured, onPlay, onAddToList, onInfoPress }: HeroBannerPr
         />
       )}
 
-      {/* Gradient overlay */}
+      {/* Gradient overlay - darker at bottom for better text readability */}
       <LinearGradient
         colors={[
-          'rgba(0,0,0,0.2)',
-          'rgba(0,0,0,0.4)',
-          'rgba(0,0,0,0.8)'
+          'transparent',
+          'transparent',
+          'rgba(0,0,0,0.3)',
+          'rgba(0,0,0,0.9)'
         ]}
+        locations={[0, 0.3, 0.7, 1]}
         style={styles.gradient}
       >
-        {/* Content badges */}
-        <View style={styles.badges}>
-          {featured.isOriginal && (
-            <View style={[styles.badge, { backgroundColor: primary }]}>
-              <Text style={styles.badgeText}>ORIGINAL</Text>
-            </View>
-          )}
-          {featured.isTopRated && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>TOP 10</Text>
-            </View>
-          )}
-          {featured.isNew && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>NEW</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Title and description */}
-        <View style={styles.contentInfo}>
-          <Text style={[styles.title, { color: text }]}>{featured.title}</Text>
-          
-          {/* Meta information */}
-          <View style={styles.metaInfo}>
-            <Text style={[styles.metaText, { color: textSecondary }]}>{featured.year}</Text>
-            <Text style={[styles.separator, { color: textSecondary }]}>•</Text>
-            <Text style={[styles.metaText, { color: textSecondary }]}>{featured.maturityRating}</Text>
-            <Text style={[styles.separator, { color: textSecondary }]}>•</Text>
-            <Text style={[styles.metaText, { color: textSecondary }]}>{featured.duration}</Text>
-          </View>
-          
-          <Text 
-            style={[styles.description, { color: textSecondary }]} 
-            numberOfLines={2}
+        {/* Mute button in top right */}
+        {isVideoReady && featured.videoUrl && !videoError && (
+          <TouchableOpacity 
+            style={styles.muteButton} 
+            onPress={handleMuteToggle}
           >
-            {featured.description}
+            <Ionicons 
+              name={isMuted ? "volume-mute" : "volume-high"} 
+              size={24} 
+              color="#fff" 
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Bottom content area - minimal */}
+        <View style={styles.contentInfo}>
+          <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+            {featured.title}
           </Text>
           
-          {/* Genres */}
-          <View style={styles.genreContainer}>
-            {featured.genres.slice(0, 3).map((genre, index) => (
-              <View key={index} style={styles.genreItem}>
-                <Text style={[styles.genreText, { color: textSecondary }]}>{genre}</Text>
-                {index < Math.min(featured.genres.length, 3) - 1 && (
-                  <Text style={[styles.separator, { color: textSecondary }]}>•</Text>
-                )}
-              </View>
-            ))}
-          </View>
-
-          {/* Action buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={[styles.playButton, { backgroundColor: primary }]} 
-              onPress={handlePlayPress}
-            >
-              <Ionicons name="play" size={20} color="#fff" />
-              <Text style={styles.playButtonText}>Play</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.secondaryButton, { borderColor: textSecondary }]} 
-              onPress={handleAddToListPress}
-            >
-              <AntDesign name="plus" size={20} color={text} />
-              <Text style={[styles.secondaryButtonText, { color: text }]}>My List</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.secondaryButton, { borderColor: textSecondary }]} 
-              onPress={handleInfoPress}
-            >
-              <Ionicons name="information-circle-outline" size={20} color={text} />
-              <Text style={[styles.secondaryButtonText, { color: text }]}>Info</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Single Watch button */}
+          <TouchableOpacity 
+            style={[styles.playButton, { backgroundColor: primary }]} 
+            onPress={handleInfoPress}
+          >
+            <Ionicons name="play" size={16} color="#fff" />
+            <Text style={styles.playButtonText}>Watch</Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
     </View>
@@ -216,90 +298,57 @@ const HeroBanner = ({ featured, onPlay, onAddToList, onInfoPress }: HeroBannerPr
 const styles = StyleSheet.create({
   container: {
     width: width,
-    height: height * 0.7,
+    height: HERO_HEIGHT,
     position: 'relative',
   },
   videoContainer: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'black',
+    overflow: 'hidden', // Ensure video is clipped to container
   },
   video: {
     width: '100%',
     height: '100%',
+    backgroundColor: 'black',
   },
   thumbnail: {
     ...StyleSheet.absoluteFillObject,
   },
   gradient: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-    paddingTop: HEADER_HEIGHT + 10,
+    justifyContent: 'flex-end',
+    paddingTop: HEADER_HEIGHT + 8,
     paddingBottom: 24,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  badge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
+  muteButton: {
+    position: 'absolute',
+    top: HEADER_HEIGHT + 8,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   contentInfo: {
     width: '100%',
-    marginBottom: 20,
+    alignItems: 'flex-start',
+    maxWidth: width - 40,
   },
   title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 10,
-  },
-  metaInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metaText: {
-    fontSize: 14,
-  },
-  separator: {
-    marginHorizontal: 6,
-  },
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 5,
-  },
-  genreContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  genreItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  genreText: {
-    fontSize: 14,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: '#fff',
+    fontSize: Math.min(width * 0.065, 28),
+    fontWeight: '700',
+    marginBottom: 14,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+    letterSpacing: -0.3,
+    lineHeight: Math.min(width * 0.075, 32),
   },
   playButton: {
     flexDirection: 'row',
@@ -307,29 +356,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 24,
-    borderRadius: 4,
-    marginRight: 12,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   playButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginLeft: 6,
-    fontSize: 16,
+    fontSize: 15,
   },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 4,
-    borderWidth: 1,
-    marginRight: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  secondaryButtonText: {
-    fontWeight: '500',
-    marginLeft: 6,
+  loadingText: {
+    color: '#fff',
+    marginTop: 12,
     fontSize: 14,
+    fontWeight: '500',
+  },
+  playPauseOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
 });
 

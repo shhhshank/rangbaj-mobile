@@ -1,31 +1,30 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Dimensions, TouchableOpacity, FlatList, StatusBar, ActivityIndicator, ListRenderItem } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Image, Dimensions, Modal, ActivityIndicator, StatusBar, ListRenderItem } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { useThemeColor } from '@/hooks/useThemeColor';
+import { Ionicons, MaterialIcons, AntDesign } from '@expo/vector-icons';
+import { useDispatch, useSelector } from 'react-redux';
+
 import { ThemedText } from '@/components/common/ThemedText';
 import { ThemedView } from '@/components/common/ThemedView';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchMovie, selectMovieById, selectIsLoading } from '@/redux/slices/contentSlice';
-import { AppDispatch, RootState } from '@/redux/store';
-import { Movie, CastMember, RelatedContent, Trailer } from '@/redux/types';
+import { useThemeColor } from '@/hooks/useThemeColor';
+import { RootState } from '@/redux/store';
+import { fetchMovie, selectMovieById } from '@/redux/slices/contentSlice';
+import { Movie, CastMember, RelatedContent } from '@/redux/types';
 
 export default function MovieContentScreen() {
   const { id } = useLocalSearchParams();
-  const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch();
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   
   // Get movie from Redux store
   const movie = useSelector((state: RootState) => selectMovieById(state, id as string));
-  const loading = useSelector(selectIsLoading);
+  const loading = useSelector((state: RootState) => state.content.loading.movies);
   
   // Fetch movie data if not already in store
   useEffect(() => {
     if (id) {
-      // Always fetch fresh data when navigating to a movie
-      console.log('Fetching movie data for ID:', id);
+      console.log('🎬 [MovieDetail] Fetching movie data for ID:', id);
       dispatch(fetchMovie(id as string));
     }
   }, [dispatch, id]);
@@ -39,8 +38,11 @@ export default function MovieContentScreen() {
   
   // Handle play button press
   const handlePlay = () => {
-    console.log('Playing movie:', id);
-    router.push(`/content/${id}`);
+    console.log('🎬 [MovieDetail] Playing movie:', id, 'Video URL:', movie?.video?.url);
+    router.push({
+      pathname: `/content/[id]`,
+      params: { id: id as string, type: 'movie' }
+    });
   };
 
   // Handle trailer button press
@@ -128,9 +130,9 @@ export default function MovieContentScreen() {
                 </View>
                 
                 <View style={styles.genreContainer}>
-                  {movie.genres.map((genre, index) => (
+                  {Array.isArray(movie.genres) && movie.genres.map((genre, index) => (
                     <View key={index} style={styles.genreTag}>
-                      <Text style={styles.genreText}>{genre}</Text>
+                      <Text style={styles.genreText}>{typeof genre === 'string' ? genre : String(genre || 'Genre')}</Text>
                     </View>
                   ))}
                 </View>
@@ -174,10 +176,10 @@ export default function MovieContentScreen() {
         <View style={[styles.descriptionContainer, {borderBottomColor: border}]}>
           <ThemedText style={styles.descriptionText}>{movie.description}</ThemedText>
           <Text style={[styles.directorText, {color: textSecondary}]}>
-            Director: <Text style={[styles.directorName, {color: text}]}>{movie.director}</Text>
+            Director: <Text style={[styles.directorName, {color: text}]}>{typeof movie.director === 'string' ? movie.director : String(movie.director || 'Unknown')}</Text>
           </Text>
           <Text style={[styles.directorText, {color: textSecondary, marginTop: 4}]}>
-            Studio: <Text style={[styles.directorName, {color: text}]}>{movie.studio}</Text>
+            Studio: <Text style={[styles.directorName, {color: text}]}>{typeof movie.studio === 'string' ? movie.studio : String(movie.studio || 'Unknown')}</Text>
           </Text>
         </View>
         

@@ -1,5 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  useDispatch,
+  useSelector
+} from 'react-redux';
+import {
+  sendOtpAsync,
+  verifyOtpAsync,
+  selectOtpStatus,
+  selectAuthError,
+  selectIsAuthenticated,
+  resetOtpStatus,
+  clearError,
+} from '@/redux/slices/authSlice';
+import { AppDispatch } from '@/redux/store';
+import {
   View,
   Text,
   StyleSheet,
@@ -53,6 +67,8 @@ const AbstractBackground = () => {
 export default function PhoneLoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch<AppDispatch>();
+  
   
   // States
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -68,6 +84,7 @@ export default function PhoneLoginScreen() {
   
   // Refs for OTP inputs
   const otpInputs = useRef<Array<TextInput | null>>([]);
+  const alertShownRef = useRef(false);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -98,7 +115,7 @@ export default function PhoneLoginScreen() {
   
   // Timer for OTP resend
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     
     if (isOtpSent && timer > 0) {
       interval = setInterval(() => {
@@ -159,93 +176,125 @@ export default function PhoneLoginScreen() {
   };
   
   // Send OTP to phone number
-  const handleSendOtp = () => {
-    // Reset any existing errors
+  const handleSendOtp = async () => {
     setError('');
+    dispatch(clearError());
     
-    // Basic validation
     if (phoneNumber.length !== 10) {
       setError('Please enter a valid 10-digit phone number');
       return;
     }
     
     setIsLoading(true);
+    alertShownRef.current = false; // Reset alert flag
     
-    // In a real app, you would call an API to send OTP
-    // Simulating API call with setTimeout
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const result = await dispatch(sendOtpAsync({ phone: phoneNumber, channel: 'sms' })).unwrap();
+      
       setIsOtpSent(true);
-      setTimer(60); // Set a 60-second timer for resend
+      setTimer(60);
       
-      setAlertType('info');
-      setAlertMessage('OTP sent to your phone number');
-      setShowAlert(true);
+      // Only show alert if not already shown
+      if (!alertShownRef.current) {
+        alertShownRef.current = true;
+        setAlertType('info');
+        setAlertMessage(result.message || 'OTP sent to your phone number');
+        setShowAlert(true);
+      }
       
-      // Focus the first OTP input
       setTimeout(() => {
         otpInputs.current[0]?.focus();
       }, 500);
-    }, 1500);
+    } catch (err: any) {
+      setError(err || 'Failed to send OTP');
+      
+      // Only show alert if not already shown
+      if (!alertShownRef.current) {
+        alertShownRef.current = true;
+        setAlertType('error');
+        setAlertMessage(err || 'Failed to send OTP');
+        setShowAlert(true);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   // Resend OTP
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     if (timer === 0) {
-      setTimer(60);
+      setError('');
+      dispatch(clearError());
+      alertShownRef.current = false; // Reset alert flag
       
-      setAlertType('info');
-      setAlertMessage('OTP resent to your phone number');
-      setShowAlert(true);
-      
-      // In a real app, you would call the API to resend OTP
+      try {
+        const result = await dispatch(sendOtpAsync({ phone: phoneNumber, channel: 'sms' })).unwrap();
+        
+        setTimer(60);
+        
+        // Only show alert if not already shown
+        if (!alertShownRef.current) {
+          alertShownRef.current = true;
+          setAlertType('info');
+          setAlertMessage(result.message || 'OTP resent successfully');
+          setShowAlert(true);
+        }
+      } catch (err: any) {
+        setError(err || 'Failed to resend OTP');
+        
+        // Only show alert if not already shown
+        if (!alertShownRef.current) {
+          alertShownRef.current = true;
+          setAlertType('error');
+          setAlertMessage(err || 'Failed to resend OTP');
+          setShowAlert(true);
+        }
+      }
     }
   };
   
   // Verify OTP and login
   const handleVerifyOtp = async () => {
-    // Reset any existing errors
     setError('');
+    dispatch(clearError());
     
-    // Check if all OTP digits are entered
     if (otp.some(digit => digit === '')) {
       setError('Please enter the complete 6-digit OTP');
       return;
     }
     
     setIsLoading(true);
+    alertShownRef.current = false; // Reset alert flag
+    const enteredOtp = otp.join('');
     
     try {
-      // In a real app, you would call an API to verify OTP
-      // Simulating API call with setTimeout
-      setTimeout(async () => {
-        // For demo purposes, we'll just consider 123456 as the correct OTP
-        const enteredOtp = otp.join('');
-        
-        if (enteredOtp === '123456') {
-          // Store auth token (in a real app)
-          await AsyncStorage.setItem('@rangbaj_auth_token', 'demo_token');
-          await AsyncStorage.setItem('@rangbaj_phone_number', phoneNumber);
-          
-          setAlertType('success');
-          setAlertMessage('Login successful!');
-          setShowAlert(true);
-          
-          setTimeout(() => {
-            router.replace('/(tabs)');
-          }, 1000);
-        } else {
-          setError('Invalid OTP. Please try again');
-          setAlertType('error');
-          setAlertMessage('Verification failed. Please check the OTP and try again.');
-          setShowAlert(true);
-        }
-        
-        setIsLoading(false);
-      }, 1500);
-    } catch (error) {
-      console.error('OTP Verification Error:', error);
-      setError('An error occurred during verification');
+      await dispatch(verifyOtpAsync({ phone: phoneNumber, otp: enteredOtp })).unwrap();
+      
+      // Store phone number for reference
+      await AsyncStorage.setItem('@rangbaj_phone_number', phoneNumber);
+      
+      // Only show alert if not already shown
+      if (!alertShownRef.current) {
+        alertShownRef.current = true;
+        setAlertType('success');
+        setAlertMessage('Login successful!');
+        setShowAlert(true);
+      }
+      
+      setTimeout(() => {
+        router.replace('/(tabs)');
+      }, 1000);
+    } catch (err: any) {
+      setError(err || 'Invalid OTP. Please try again');
+      
+      // Only show alert if not already shown
+      if (!alertShownRef.current) {
+        alertShownRef.current = true;
+        setAlertType('error');
+        setAlertMessage(err || 'Verification failed. Please check the OTP and try again.');
+        setShowAlert(true);
+      }
+    } finally {
       setIsLoading(false);
     }
   };
@@ -255,6 +304,8 @@ export default function PhoneLoginScreen() {
     setIsOtpSent(false);
     setOtp(['', '', '', '', '', '']);
     setTimer(0);
+    setError('');
+    dispatch(resetOtpStatus());
   };
 
   const handleSkipLogin = async () => {
@@ -268,6 +319,7 @@ export default function PhoneLoginScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Removed recaptcha-container for React Native */}
       <StatusBar barStyle="light-content" />
       <AbstractBackground />
       <KeyboardAvoidingView 
@@ -339,12 +391,9 @@ export default function PhoneLoginScreen() {
                   )}
                 </TouchableOpacity>
                 
-                <TouchableOpacity
-                  style={styles.skipButton}
-                  onPress={handleSkipLogin}
-                >
-                  <Text style={styles.skipButtonText}>Skip Login</Text>
-                </TouchableOpacity>
+               
+                
+                
                 
                 <View style={styles.infoContainer}>
                   <Ionicons name="information-circle-outline" size={18} color="rgba(255,255,255,0.7)" />
@@ -613,6 +662,18 @@ const styles = StyleSheet.create({
   skipButtonText: {
     color: '#888',
     fontSize: 16,
+  },
+  debugButton: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  debugButtonText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginLeft: 4,
   },
   footerContainer: {
     alignItems: 'center',

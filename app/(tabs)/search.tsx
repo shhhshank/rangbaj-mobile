@@ -1,6 +1,9 @@
 import { Text, View, StyleSheet, TextInput, TouchableOpacity, FlatList, ScrollView, Image, Dimensions, StatusBar, ActivityIndicator } from "react-native";
 import { useState, useEffect, useCallback } from 'react';
 import { ThemedView } from '@/components/common/ThemedView';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/redux/store';
+import { Movie, Show } from '@/redux/types';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { Ionicons, MaterialIcons, Feather, AntDesign } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
@@ -26,24 +29,6 @@ const initialRecentSearches = [
 ];
 
 // Define interfaces for our data types
-interface Movie {
-  id: string;
-  title: string;
-  image: string;
-  year: string;
-  rating: number;
-  duration: string;
-}
-
-interface Show {
-  id: string;
-  title: string;
-  image: string;
-  year: string;
-  rating: number;
-  seasons: number;
-}
-
 interface Actor {
   id: string;
   name: string;
@@ -56,82 +41,6 @@ interface SearchResults {
   shows: Show[];
   actors: Actor[];
 }
-
-// Mock search results
-const mockSearchResults: SearchResults = {
-  movies: [
-    { 
-      id: '301', 
-      title: 'Quantum Resonance', 
-      image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&auto=format&fit=crop', 
-      year: '2023',
-      rating: 4.8,
-      duration: '2h 15m',
-    },
-    { 
-      id: '302', 
-      title: 'Stellar Odyssey', 
-      image: 'https://images.unsplash.com/photo-1465101162946-4377e57745c3?w=400&auto=format&fit=crop', 
-      year: '2024',
-      rating: 4.5,
-      duration: '1h 58m',
-    },
-    { 
-      id: '303', 
-      title: 'Dark Matter', 
-      image: 'https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=400&auto=format&fit=crop', 
-      year: '2023',
-      rating: 4.3,
-      duration: '2h 05m',
-    },
-  ],
-  shows: [
-    { 
-      id: '601', 
-      title: 'The Universe\'s Edge', 
-      image: 'https://images.unsplash.com/photo-1501862700950-18382cd41497?w=400&auto=format&fit=crop', 
-      year: '2024',
-      rating: 4.7,
-      seasons: 1,
-    },
-    { 
-      id: '602', 
-      title: 'Quantum Echoes', 
-      image: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400&auto=format&fit=crop', 
-      year: '2023',
-      rating: 4.5,
-      seasons: 2,
-    },
-    { 
-      id: '603', 
-      title: 'Stellar Genesis', 
-      image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&auto=format&fit=crop', 
-      year: '2022',
-      rating: 4.6,
-      seasons: 3,
-    },
-  ],
-  actors: [
-    {
-      id: 'a1',
-      name: 'Ryan Gosling',
-      image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop',
-      knownFor: 'Quantum Resonance',
-    },
-    {
-      id: 'a2',
-      name: 'Sandra Bullock',
-      image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop',
-      knownFor: 'Stellar Odyssey',
-    },
-    {
-      id: 'a3',
-      name: 'Anthony Mackie',
-      image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
-      knownFor: 'Dark Matter',
-    },
-  ]
-};
 
 export default function Search() {
   const [query, setQuery] = useState('');
@@ -149,6 +58,10 @@ export default function Search() {
   const border = useThemeColor('border');
   const solidBackground = useThemeColor('solidBackground');
   
+  // Get movies and shows from Redux
+  const movies = useSelector((state: RootState) => Object.values(state.content.movies));
+  const shows = useSelector((state: RootState) => Object.values(state.content.shows));
+
   // Debounced search function
   const performSearch = useCallback(
     debounce((searchQuery: string) => {
@@ -157,34 +70,25 @@ export default function Search() {
         setIsSearching(false);
         return;
       }
-      
       setIsSearching(true);
-      
-      // Simulate API call
       setTimeout(() => {
-        // Filter mock results based on query
         const filteredResults: SearchResults = {
-          movies: mockSearchResults.movies.filter(
+          movies: movies.filter(
             item => item.title.toLowerCase().includes(searchQuery.toLowerCase())
           ),
-          shows: mockSearchResults.shows.filter(
+          shows: shows.filter(
             item => item.title.toLowerCase().includes(searchQuery.toLowerCase())
           ),
-          actors: mockSearchResults.actors.filter(
-            item => item.name.toLowerCase().includes(searchQuery.toLowerCase())
-          ),
+          actors: [], // No actor search from backend yet
         };
-        
         setSearchResults(filteredResults);
         setIsSearching(false);
-        
-        // Add to recent searches if not already there
         if (searchQuery.trim() && !recentSearches.includes(searchQuery)) {
           setRecentSearches(prev => [searchQuery, ...prev.slice(0, 3)]);
         }
-      }, 500);
+      }, 300);
     }, 300),
-    [recentSearches]
+    [recentSearches, movies, shows]
   );
   
   const handleQueryChange = (text: string) => {
@@ -250,21 +154,21 @@ export default function Search() {
         onPress={() => handleContentPress(item, type)}
         activeOpacity={0.7}
       >
-        <Image source={{ uri: item.image }} style={styles.resultImage} />
+        <Image source={{ uri: isActor(item) ? item.image : (item as Movie | Show).thumbnailUrl }} style={styles.resultImage} />
         <View style={styles.resultInfo}>
           <Text style={[styles.resultTitle, { color: text }]} numberOfLines={1}>
             {isActor(item) ? item.name : item.title}
           </Text>
           
           <View style={styles.resultMeta}>
-            {(isMovie(item) || isShow(item)) && item.year && (
-              <Text style={[styles.resultYear, { color: textSecondary }]}>{item.year}</Text>
+            {(isMovie(item) || isShow(item)) && (item as Movie | Show).releaseYear && (
+              <Text style={[styles.resultYear, { color: textSecondary }]}>{(item as Movie | Show).releaseYear}</Text>
             )}
             
-            {(isMovie(item) || isShow(item)) && item.rating && (
+            {(isMovie(item) || isShow(item)) && (item as Movie | Show).starRating && (
               <View style={styles.ratingContainer}>
                 <AntDesign name="star" size={12} color="#FFD700" />
-                <Text style={[styles.ratingText, { color: textSecondary }]}>{item.rating}</Text>
+                <Text style={[styles.ratingText, { color: textSecondary }]}>{(item as Movie | Show).starRating}</Text>
               </View>
             )}
             
@@ -478,57 +382,7 @@ export default function Search() {
         ) : (
           // Initial search state with trending and recent searches
           <>
-            {/* Trending Searches */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: text }]}>
-                Trending Searches
-              </Text>
-              <View style={styles.chipsContainer}>
-                {trendingSearches.map((item, index) => renderSearchChip(item, index))}
-              </View>
-            </View>
-            
-            {/* Recent Searches */}
-            {recentSearches.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: text }]}>
-                    Recent Searches
-                  </Text>
-                  <TouchableOpacity onPress={handleClearRecentSearches}>
-                    <Text style={[styles.clearText, { color: primary }]}>Clear All</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.chipsContainer}>
-                  {recentSearches.map((item, index) => renderSearchChip(item, index))}
-                </View>
-              </View>
-            )}
-            
-            {/* Explore Categories */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: text }]}>
-                Explore Categories
-              </Text>
-              <View style={styles.categoriesContainer}>
-                {[
-                  { name: 'Action', icon: 'flash-outline' },
-                  { name: 'Comedy', icon: 'happy-outline' },
-                  { name: 'Sci-Fi', icon: 'planet-outline' },
-                  { name: 'Horror', icon: 'skull-outline' },
-                  { name: 'Drama', icon: 'film-outline' },
-                  { name: 'Documentary', icon: 'camera-outline' },
-                ].map((category, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[styles.categoryItem, { backgroundColor: solidBackground }]}
-                  >
-                    <Ionicons name={category.icon as any} size={24} color={primary} />
-                    <Text style={[styles.categoryName, { color: text }]}>{category.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+           
           </>
         )}
       </ScrollView>

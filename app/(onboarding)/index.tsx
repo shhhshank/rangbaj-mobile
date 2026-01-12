@@ -167,14 +167,7 @@ export default function OnboardingScreen() {
             resizeMode="contain"
           />
           
-          {slideIndex < slides.length - 1 && (
-            <TouchableOpacity 
-              style={styles.skipButton}
-              onPress={handleSkip}
-            >
-              <Text style={styles.skipButtonText}>Skip</Text>
-            </TouchableOpacity>
-          )}
+          
         </View>
         
         <View style={styles.slidesContainer}>

@@ -63,6 +63,15 @@ export default function LoginScreen() {
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('error');
 
+  // Phone auth state
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [phoneStep, setPhoneStep] = useState<'input' | 'otp'>('input');
+  const [phoneError, setPhoneError] = useState('');
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -262,13 +271,22 @@ export default function LoginScreen() {
               <Text style={styles.loginButtonText}>Sign In</Text>
             )}
           </TouchableOpacity>
-          
+
+          {/* Phone Login Button */}
           <TouchableOpacity
-            style={styles.skipButton}
-            onPress={handleSkipLogin}
+            style={styles.loginButton}
+            onPress={() => setShowPhoneModal(true)}
           >
-            <Text style={styles.skipButtonText}>Skip Login</Text>
+            <LinearGradient
+              colors={['#9C27B0', '#FF4081']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Text style={styles.loginButtonText}>Sign in with Phone</Text>
           </TouchableOpacity>
+
+         
           
           <View style={styles.socialLoginContainer}>
             <Text style={styles.orText}>or sign in with</Text>
@@ -304,6 +322,69 @@ export default function LoginScreen() {
         duration={3000}
         onClose={() => setShowAlert(false)}
       />
+
+      {/* Phone Auth Modal */}
+      {showPhoneModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.title}>Sign in with Phone</Text>
+            {phoneStep === 'input' ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter phone number"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
+                />
+                {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+                <TouchableOpacity
+                  style={styles.loginButton}
+                  onPress={() => setPhoneStep('otp')}
+                  disabled={isSendingOtp}
+                >
+                  <LinearGradient
+                    colors={['#FF4081', '#9C27B0']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <Text style={styles.loginButtonText}>{isSendingOtp ? 'Sending...' : 'Send OTP'}</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter OTP"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  keyboardType="number-pad"
+                  value={otp}
+                  onChangeText={setOtp}
+                />
+                {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+                <TouchableOpacity
+                  style={styles.loginButton}
+                  onPress={() => {}}
+                  disabled={isVerifyingOtp}
+                >
+                  <LinearGradient
+                    colors={['#FF4081', '#9C27B0']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <Text style={styles.loginButtonText}>{isVerifyingOtp ? 'Verifying...' : 'Verify OTP'}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity style={styles.skipButton} onPress={() => setShowPhoneModal(false)}>
+              <Text style={styles.skipButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -455,5 +536,25 @@ const styles = StyleSheet.create({
     color: '#FF4081',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 400,
+    backgroundColor: '#232323',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
   },
 });

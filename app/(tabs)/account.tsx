@@ -7,16 +7,9 @@ import { useThemeColor } from '@/hooks/useThemeColor';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import FloatingAlert from '@/components/common/FloatingAlert';
-
-// Mock user data
-const userData = {
-  name: 'Rahul Sharma',
-  email: 'rahul.sharma@example.com',
-  avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
-  plan: 'Premium',
-  watchlist: 14,
-  downloads: 3,
-};
+import { useDispatch, useSelector } from 'react-redux';
+import { logout, selectUser, selectIsAuthenticated } from '@/redux/slices/authSlice';
+import { AppDispatch } from '@/redux/store';
 
 // Define types for settings items
 type RoutePathType = string;
@@ -38,29 +31,9 @@ interface SettingsSection {
 // Mock settings data
 const settingsSections: SettingsSection[] = [
   {
-    title: 'Content Preferences',
-    icon: 'film-outline',
-    items: [
-      { id: 'language', title: 'Display Language', value: 'English', type: 'option', route: '/settings/language' },
-      { id: 'subtitles', title: 'Subtitles', value: true, type: 'toggle' },
-      { id: 'autoplay', title: 'Autoplay Previews', value: true, type: 'toggle' },
-      { id: 'notifications', title: 'Notifications', value: null, type: 'link', route: '/settings/notifications' },
-    ]
-  },
-  {
-    title: 'Playback',
-    icon: 'play-circle-outline',
-    items: [
-      { id: 'quality', title: 'Streaming Quality', value: 'Auto', type: 'option', route: '/settings/quality' },
-      { id: 'data-usage', title: 'Data Usage', value: null, type: 'link', route: '/settings/data-usage' },
-      { id: 'download-quality', title: 'Download Quality', value: 'High', type: 'option', route: '/settings/quality' },
-    ]
-  },
-  {
     title: 'Account',
     icon: 'person-circle-outline',
     items: [
-      { id: 'security', title: 'Security', value: null, type: 'link', route: '/settings/security' },
       { id: 'payment', title: 'Payment & Subscription', value: null, type: 'link', route: '/settings/payment' },
       { id: 'profile', title: 'Edit Profile', value: null, type: 'link' },
     ]
@@ -69,7 +42,6 @@ const settingsSections: SettingsSection[] = [
     title: 'About',
     icon: 'information-circle-outline',
     items: [
-      { id: 'help', title: 'Help & Support', value: null, type: 'link', route: '/settings/help' },
       { id: 'terms', title: 'Terms & Conditions', value: null, type: 'link' },
       { id: 'privacy', title: 'Privacy Policy', value: null, type: 'link' },
     ]
@@ -83,6 +55,10 @@ interface SettingState {
 
 export default function Account() {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
+  const user = useSelector(selectUser);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+  
   const background = useThemeColor('background');
   const text = useThemeColor('text');
   const textSecondary = useThemeColor('textSecondary');
@@ -225,60 +201,40 @@ export default function Account() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.profileSection}>
-          <View style={styles.profileInfo}>
-            <Image 
-              source={{ uri: userData.avatar }}
-              style={styles.avatar}
-              resizeMode="cover"
-            />
+        <View style={[styles.profileCard, { backgroundColor: solidBackground }]}>
+          <View style={styles.profileSection}>
+            <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: `${primary}20` }]}>
+              <Ionicons name="person" size={48} color={primary} />
+            </View>
             <View style={styles.userDetails}>
-              <Text style={[styles.userName, { color: text }]}>{userData.name}</Text>
-              <Text style={[styles.userEmail, { color: textSecondary }]}>{userData.email}</Text>
+              <Text style={[styles.userName, { color: text }]}>
+                {user?.name || 'User'}
+              </Text>
+              <Text style={[styles.userEmail, { color: textSecondary }]}>
+                {user?.phone || user?.email || 'Not logged in'}
+              </Text>
               <View style={[styles.planBadge, { backgroundColor: primary }]}>
-                <Text style={[styles.planText, { color: '#fff' }]}>{userData.plan}</Text>
+                <Text style={[styles.planText, { color: '#fff' }]}>
+                  {isAuthenticated ? 'Free' : 'Guest'}
+                </Text>
               </View>
             </View>
-          </View>
-          
-          <TouchableOpacity 
-            style={[styles.editProfileButton, { backgroundColor: `${primary}15` }]}
-            onPress={() => {
-              setAlertMessage('Opening profile editor');
-              setAlertType('info');
-              setShowAlert(true);
-              setTimeout(() => setShowAlert(false), 2000);
-            }}
-          >
-            <Feather name="edit-2" size={16} color={primary} />
-          </TouchableOpacity>
-        </View>
-        
-        <View style={[styles.statsContainer, { backgroundColor: solidBackground, borderColor: border }]}>
-          <View style={styles.statItem}>
-            <Ionicons name="bookmark-outline" size={24} color={primary} />
-            <Text style={[styles.statValue, { color: text }]}>{userData.watchlist}</Text>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>Watchlist</Text>
-          </View>
-          
-          <View style={[styles.statDivider, { backgroundColor: border }]} />
-          
-          <View style={styles.statItem}>
-            <Ionicons name="time-outline" size={24} color={primary} />
-            <Text style={[styles.statValue, { color: text }]}>48h</Text>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>Watched</Text>
-          </View>
-          
-          <View style={[styles.statDivider, { backgroundColor: border }]} />
-          
-          <View style={styles.statItem}>
-            <Ionicons name="download-outline" size={24} color={primary} />
-            <Text style={[styles.statValue, { color: text }]}>{userData.downloads}</Text>
-            <Text style={[styles.statLabel, { color: textSecondary }]}>Downloads</Text>
+            <TouchableOpacity 
+              style={[styles.editProfileButton, { backgroundColor: `${primary}15` }]}
+              onPress={() => {
+                setAlertMessage('Opening profile editor');
+                setAlertType('info');
+                setShowAlert(true);
+                setTimeout(() => setShowAlert(false), 2000);
+              }}
+            >
+              <Feather name="edit-2" size={18} color={primary} />
+            </TouchableOpacity>
           </View>
         </View>
         
-        {userData.plan !== 'Premium' && (
+        
+        {isAuthenticated && (
           <View style={styles.subscriptionContainer}>
             <LinearGradient
               colors={['#8E2DE2', '#4A00E0']}
@@ -287,12 +243,10 @@ export default function Account() {
               style={styles.subscriptionBanner}
             >
               <View style={styles.subscriptionContent}>
-                <View>
-                  <Text style={styles.subscriptionTitle}>Upgrade to Premium</Text>
-                  <Text style={styles.subscriptionDescription}>
-                    Enjoy ad-free streaming, Ultra HD quality, and offline downloads
-                  </Text>
-                </View>
+                <Text style={styles.subscriptionTitle}>Upgrade to Premium</Text>
+                <Text style={styles.subscriptionDescription}>
+                  Enjoy ad-free streaming, Ultra HD quality, and offline downloads
+                </Text>
                 
                 <TouchableOpacity 
                   style={styles.subscribeButton}
@@ -303,10 +257,8 @@ export default function Account() {
                     setTimeout(() => setShowAlert(false), 2000);
                   }}
                 >
-                  <View style={styles.buttonContent}>
-                    <Ionicons name="star" size={16} color="#fff" />
-                    <Text style={styles.subscribeButtonText}>Upgrade</Text>
-                  </View>
+                  <Ionicons name="star" size={18} color="#fff" />
+                  <Text style={styles.subscribeButtonText}>Upgrade</Text>
                 </TouchableOpacity>
               </View>
             </LinearGradient>
@@ -318,10 +270,19 @@ export default function Account() {
         <TouchableOpacity 
           style={[styles.logoutButton, { borderColor: '#EF4444' }]}
           onPress={() => {
-            setAlertMessage('You have been signed out');
-            setAlertType('info');
+            // Dispatch logout action
+            dispatch(logout());
+            
+            // Show success message
+            setAlertMessage('You have been signed out successfully');
+            setAlertType('success');
             setShowAlert(true);
-            setTimeout(() => setShowAlert(false), 2000);
+            
+            // Navigate to auth screen after a short delay
+            setTimeout(() => {
+              setShowAlert(false);
+              router.replace('/(auth)/phone-login');
+            }, 1500);
           }}
         >
           <Ionicons name="log-out-outline" size={20} color="#EF4444" />
@@ -381,14 +342,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+    paddingTop: 16,
   },
-  profileSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  profileCard: {
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 20,
   },
-  profileInfo: {
+  profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -398,21 +359,26 @@ const styles = StyleSheet.create({
     borderRadius: 35,
     marginRight: 16,
   },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   userDetails: {
+    flex: 1,
     justifyContent: 'center',
   },
   userName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   userEmail: {
     fontSize: 14,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   planBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderRadius: 12,
     alignSelf: 'flex-start',
   },
@@ -453,42 +419,45 @@ const styles = StyleSheet.create({
     height: '60%',
   },
   subscriptionContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   subscriptionBanner: {
     borderRadius: 16,
     overflow: 'hidden',
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    padding: 20,
   },
   subscriptionContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    width: '100%',
   },
   subscriptionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 6,
+    color: '#fff',
+    marginBottom: 8,
   },
   subscriptionDescription: {
     fontSize: 13,
-    maxWidth: width * 0.55,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 18,
+    marginBottom: 16,
   },
   subscribeButton: {
-    borderRadius: 24,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-  },
-  buttonContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    alignSelf: 'flex-start',
   },
   subscribeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
   },
   settingsSection: {
     marginBottom: 24,

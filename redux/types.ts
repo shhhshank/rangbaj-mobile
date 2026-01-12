@@ -40,6 +40,13 @@ export interface Episode {
   trailer?: Trailer;
 }
 
+// Video structure for HLS streaming
+export interface Video {
+  url: string;
+  quality?: string;
+  format?: string;
+}
+
 // Base content interface for shared properties
 export interface BaseContent {
   id: string;
@@ -60,6 +67,7 @@ export interface BaseContent {
   isTrending?: boolean;
   isOriginal?: boolean;
   trailers?: Trailer[];
+  video?: Video;
 }
 
 // Movie specific interface

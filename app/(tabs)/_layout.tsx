@@ -40,7 +40,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabBarIcon name="magnify" color={color} />,
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="notifications"
         options={{
           title: 'Notifications',
@@ -58,7 +58,7 @@ export default function TabLayout() {
             setUnreadNotifications(false);
           },
         }}
-      />
+      /> */}
       <Tabs.Screen
         name="account"
         options={{

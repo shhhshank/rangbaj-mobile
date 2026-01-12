@@ -1,12 +1,286 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { RootState } from '../store';
-import { Movie, Show, Trailer, ContentType, ContentSection as ContentSectionType } from '../types';
+import { Movie, Show, Trailer, ContentType } from '../types';
 
-// Mock data - to be replaced with API calls later
-import { movieData } from '../mock/movieData';
-import { showData } from '../mock/showData';
+import axios from 'axios';
+import { adaptApiMovie, adaptApiShow, adaptApiContentIdList } from '../contentAdapter';
 
-// Mock trailers data
+// API endpoints
+const CONTENT_LIST_URL = 'http://185.193.19.10:8000/content/get';
+const CONTENT_DETAIL_URL = 'http://185.193.19.10:8000/content/getOne';
+
+// --- Thunk: Fetch all content IDs ---
+export const fetchAllContentIds = createAsyncThunk<string[], void, { rejectValue: string, state: RootState }>(
+  'content/fetchAllContentIds',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      console.log('🌐 [API] Fetching all content IDs from:', CONTENT_LIST_URL);
+      const token = getState().auth.token;
+      console.log('🔑 [API] Using auth token:', token ? 'Present' : 'Missing');
+      
+      const response = await axios.get(CONTENT_LIST_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      console.log('✅ [API] Content IDs response:', {
+        status: response.status,
+        dataStructure: {
+          hasData: !!response.data,
+          hasDataData: !!response.data?.data,
+          hasContents: !!response.data?.data?.contents,
+          contentsIsArray: Array.isArray(response.data?.data?.contents),
+          contentsLength: response.data?.data?.contents?.length || 0
+        }
+      });
+      
+      if (response.data && response.data.data && Array.isArray(response.data.data.contents)) {
+        const adaptedIds = adaptApiContentIdList(response.data.data.contents);
+        console.log('📈 [API] Adapted content IDs:', { count: adaptedIds.length, sample: adaptedIds.slice(0, 3) });
+        return adaptedIds;
+      }
+      console.log('❌ [API] Invalid response structure for content IDs');
+      return rejectWithValue('Invalid response');
+    } catch (err: any) {
+      console.error('❌ [API] Content IDs fetch error:', {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data
+      });
+      return rejectWithValue(err.response?.data?.message || err.message || 'Network error');
+    }
+  }
+);
+
+// --- Thunk: Fetch content detail by ID ---
+export const fetchContentById = createAsyncThunk<any, string, { rejectValue: string, state: RootState }>(
+  'content/fetchContentById',
+  async (contentId, { getState, rejectWithValue }) => {
+    try {
+      console.log(`🌐 [API] Fetching content details for ID: ${contentId}`);
+      const token = getState().auth.token;
+      const url = `${CONTENT_DETAIL_URL}?content_id=${contentId}`;
+      
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      console.log(`✅ [API] Content detail response for ${contentId}:`, {
+        status: response.status,
+        hasContent: !!response.data?.data?.content,
+        contentType: response.data?.data?.content?.contentType
+      });
+      
+      if (response.data && response.data.data && response.data.data.content) {
+        const apiContent = response.data.data.content;
+        // Use type to decide
+        if (apiContent.contentType === 'movie') {
+          const adaptedMovie = adaptApiMovie(apiContent);
+          console.log(`🎬 [API] Adapted movie:`, { id: adaptedMovie.id, title: adaptedMovie.title });
+          return { type: 'movie', data: adaptedMovie };
+        } else {
+          const adaptedShow = adaptApiShow(apiContent);
+          console.log(`📺 [API] Adapted show:`, { id: adaptedShow.id, title: adaptedShow.title });
+          return { type: 'show', data: adaptedShow };
+        }
+      }
+      console.log(`❌ [API] Invalid response structure for content ${contentId}`);
+      return rejectWithValue('Invalid response');
+    } catch (err: any) {
+      console.error(`❌ [API] Content detail fetch error for ${contentId}:`, {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data
+      });
+      return rejectWithValue(err.response?.data?.message || err.message || 'Network error');
+    }
+  }
+);
+
+// --- Thunk: Fetch movie by ID (with fallback to mock data) ---
+export const fetchMovie = createAsyncThunk<Movie, string, { rejectValue: string, state: RootState }>(
+  'content/fetchMovie',
+  async (movieId, { getState, dispatch, rejectWithValue }) => {
+    try {
+      console.log(`🎬 [API] Fetching movie details for ID: ${movieId}`);
+      
+      // Check if movie already exists in store
+      const state = getState();
+      const existingMovie = state.content.movies[movieId];
+      if (existingMovie) {
+        console.log(`✅ [CACHE] Movie ${movieId} found in store:`, { title: existingMovie.title });
+        return existingMovie;
+      }
+      
+      // Try to fetch from API first
+      const result = await dispatch(fetchContentById(movieId));
+      if (fetchContentById.fulfilled.match(result) && result.payload.type === 'movie') {
+        console.log(`✅ [API] Movie fetched successfully:`, { id: result.payload.data.id, title: result.payload.data.title });
+        return result.payload.data;
+      }
+      
+      // Fallback to mock data
+      console.log(`🔄 [FALLBACK] API failed, using mock data for movie ${movieId}`);
+      const { movieData } = await import('../mock/movieData');
+      const mockMovie = movieData.find(m => m.id === movieId);
+      
+      if (mockMovie) {
+        console.log(`✅ [MOCK] Found mock movie:`, { id: mockMovie.id, title: mockMovie.title });
+        return mockMovie;
+      }
+      
+      // If no mock data either, return a generic movie
+      console.log(`⚠️ [FALLBACK] No mock data found, creating generic movie for ID: ${movieId}`);
+      return {
+        id: movieId,
+        title: 'Movie Title',
+        description: 'Movie description not available.',
+        releaseYear: '2024',
+        rating: 'PG-13',
+        duration: '2h 00m',
+        genres: ['Drama'],
+        starRating: 4.0,
+        thumbnailUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop',
+        coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop',
+        director: 'Unknown Director',
+        studio: 'Rangbaj Studios',
+        cast: [
+          { name: 'Actor 1', character: 'Character 1', image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop' },
+          { name: 'Actor 2', character: 'Character 2', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop' }
+        ],
+        relatedMovies: [],
+        isNew: false,
+        isTrending: false,
+        isOriginal: false,
+        trailers: []
+      };
+    } catch (err: any) {
+      console.error(`❌ [ERROR] Failed to fetch movie ${movieId}:`, err.message);
+      return rejectWithValue(err.message || 'Failed to fetch movie');
+    }
+  }
+);
+
+// --- Thunk: Fetch show by ID (with fallback to mock data) ---
+export const fetchShow = createAsyncThunk<Show, string, { rejectValue: string, state: RootState }>(
+  'content/fetchShow',
+  async (showId, { getState, dispatch, rejectWithValue }) => {
+    try {
+      console.log(`📺 [API] Fetching show details for ID: ${showId}`);
+      
+      // Check if show already exists in store
+      const state = getState();
+      const existingShow = state.content.shows[showId];
+      if (existingShow) {
+        console.log(`✅ [CACHE] Show ${showId} found in store:`, { title: existingShow.title });
+        return existingShow;
+      }
+      
+      // Try to fetch from API first
+      const result = await dispatch(fetchContentById(showId));
+      if (fetchContentById.fulfilled.match(result) && result.payload.type === 'show') {
+        console.log(`✅ [API] Show fetched successfully:`, { id: result.payload.data.id, title: result.payload.data.title });
+        return result.payload.data;
+      }
+      
+      // Fallback to mock data
+      console.log(`🔄 [FALLBACK] API failed, using mock data for show ${showId}`);
+      const { showData } = await import('../mock/showData');
+      const mockShow = showData.find(s => s.id === showId);
+      
+      if (mockShow) {
+        console.log(`✅ [MOCK] Found mock show:`, { id: mockShow.id, title: mockShow.title });
+        return mockShow;
+      }
+      
+      // If no mock data either, return a generic show
+      console.log(`⚠️ [FALLBACK] No mock data found, creating generic show for ID: ${showId}`);
+      return {
+        id: showId,
+        title: 'Show Title',
+        description: 'Show description not available.',
+        releaseYear: '2024',
+        rating: 'TV-14',
+        genres: ['Drama'],
+        starRating: 4.0,
+        thumbnailUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop',
+        coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop',
+        director: 'Unknown Director',
+        studio: 'Rangbaj Studios',
+        cast: [
+          { name: 'Actor 1', character: 'Character 1', image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop' },
+          { name: 'Actor 2', character: 'Character 2', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop' }
+        ],
+        relatedShows: [],
+        isNew: false,
+        isTrending: false,
+        isOriginal: false,
+        trailers: [],
+        seasons: 1,
+        episodes: [],
+        seasonDetails: [],
+        creator: 'Unknown Creator',
+        network: 'Rangbaj Network'
+      };
+    } catch (err: any) {
+      console.error(`❌ [ERROR] Failed to fetch show ${showId}:`, err.message);
+      return rejectWithValue(err.message || 'Failed to fetch show');
+    }
+  }
+);
+
+// --- Thunk: Fetch content groups/sections from API ---
+import { adaptApiContentGroupsToSections } from '../contentAdapter';
+export const fetchContentSections = createAsyncThunk<
+  ContentSectionLite[],
+  void,
+  { rejectValue: string; state: RootState }
+>(
+  'content/fetchContentSections',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      console.log('🌐 [API] Fetching content sections/groups...');
+      const token = getState().auth.accessToken;
+      const url = 'http://185.193.19.10:8000/contentGroup/get';
+      
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      console.log('✅ [API] Content sections response:', { status: response.status, dataStructure: { hasData: !!response.data, hasDataData: !!response.data?.data, hasContentGroups: !!response.data?.data?.contentGroups, groupsIsArray: Array.isArray(response.data?.data?.contentGroups), groupsCount: response.data?.data?.contentGroups?.length || 0 } });
+      
+      // Log the raw API response structure to debug (reduced logging)
+      console.log('🔍 [API] Raw contentGroups structure:', {
+        groupsCount: response.data?.data?.contentGroups?.length || 0,
+        firstGroupSample: response.data?.data?.contentGroups?.[0] ? {
+          id: response.data.data.contentGroups[0]._id,
+          title: response.data.data.contentGroups[0].title,
+          contentsCount: response.data.data.contentGroups[0].contents?.length || 0,
+          contentsIsArray: Array.isArray(response.data.data.contentGroups[0].contents)
+        } : null
+      });
+      
+      if (response.data && response.data.data && Array.isArray(response.data.data.contentGroups)) {
+        const adaptedSections = adaptApiContentGroupsToSections(response.data.data.contentGroups);
+        console.log('📈 [API] Adapted content sections:', {
+          count: adaptedSections.length,
+          sections: adaptedSections.map(s => ({ id: s.id, title: s.title, contentIdsCount: s.contentIds.length }))
+        });
+        return adaptedSections;
+      }
+      console.log('❌ [API] Invalid response structure for content sections');
+      return rejectWithValue('Invalid response from contentGroup API');
+    } catch (err: any) {
+      console.error('❌ [API] Content sections fetch error:', {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data
+      });
+      return rejectWithValue(err.response?.data?.message || err.message || 'Network error');
+    }
+  }
+);
+
+// Keep trailersData for now for UI compatibility
 const trailersData: Trailer[] = [
   {
     id: '301',
@@ -46,27 +320,20 @@ const trailersData: Trailer[] = [
   }
 ];
 
-export interface ContentSection {
+export interface ContentSectionLite {
+  id: string;
   title: string;
-  contentType: 'movie' | 'show' | 'mixed';
-  data: any[];
-}
-
-// Define content filter types
-export enum ContentFilterType {
-  ALL = 'all',
-  MOVIES = 'movies',
-  SHOWS = 'shows',
-  NEW = 'new',
-  TRENDING = 'trending',
-  ORIGINALS = 'originals'
+  contentIds: string[];
+  type: 'standard' | 'hero';
 }
 
 export interface ContentState {
   movies: Record<string, Movie>;
   shows: Record<string, Show>;
-  contentSections: ContentSection[];
-  activeFilter: ContentFilterType;
+  contentSections: ContentSectionLite[];
+  heroSection: ContentSectionLite | null;
+  allContentIds: string[];
+  activeFilter: string;
   loading: {
     movies: boolean;
     shows: boolean;
@@ -77,13 +344,17 @@ export interface ContentState {
     id: string;
     type: 'movie' | 'show';
   } | null;
+  sectionsFetched: boolean; // Track if sections API was attempted
 }
+
 
 const initialState: ContentState = {
   movies: {},
   shows: {},
   contentSections: [],
-  activeFilter: ContentFilterType.ALL,
+  heroSection: null,
+  allContentIds: [],
+  activeFilter: 'all',
   loading: {
     movies: false,
     shows: false,
@@ -91,304 +362,304 @@ const initialState: ContentState = {
   },
   error: null,
   featuredContent: null,
+  sectionsFetched: false,
 };
-
-// Async thunks for data fetching with middleware pattern
-// These will be replaced with actual API calls in the future
-
-export const fetchMovie = createAsyncThunk(
-  'content/fetchMovie',
-  async (movieId: string, { rejectWithValue }) => {
-    try {
-      // Simulate API call with a delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Fetch from mock data
-      const movie = movieData.find(m => m.id === movieId);
-      if (!movie) {
-        throw new Error('Movie not found');
-      }
-      
-      // Add trailers to the movie (for demo purposes)
-      // In a real app, this would come from the API
-      const movieWithTrailers = {
-        ...movie,
-        trailers: [trailersData[0], trailersData[2]]
-      } as Movie;
-      
-      return movieWithTrailers;
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
-    }
-  }
-);
-
-export const fetchShow = createAsyncThunk(
-  'content/fetchShow',
-  async (showId: string, { rejectWithValue }) => {
-    try {
-      // Simulate API call with a delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Fetch from mock data
-      const show = showData.find((s: any) => s.id === showId);
-      if (!show) {
-        throw new Error('Show not found');
-      }
-      
-      // Map the "seasons" array to "seasonDetails" to avoid conflicts
-      // with the numeric "seasons" property
-      // Ensure seasons is an array for safety
-      const showWithSeasonDetails = {
-        ...show,
-        seasonDetails: Array.isArray(show.seasons) ? show.seasons : [],
-        // Add trailers to the show (for demo purposes)
-        trailers: [trailersData[1], trailersData[3]]
-      } as Show;
-      
-      console.log('Show with seasons:', showWithSeasonDetails.title, 'Seasons:', showWithSeasonDetails.seasonDetails?.length || 0);
-      
-      // Return a properly structured show object
-      return showWithSeasonDetails;
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
-    }
-  }
-);
-
-export const fetchContentSections = createAsyncThunk(
-  'content/fetchContentSections',
-  async (filterType: ContentFilterType, { rejectWithValue }) => {
-    try {
-      // Simulate API call with a delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      let sections: ContentSection[] = [];
-      
-      // Generate content sections based on filter type
-      switch (filterType) {
-        case ContentFilterType.ALL:
-          sections = [
-            {
-              title: 'Trending Now',
-              contentType: 'mixed',
-              data: [...movieData.slice(0, 5), ...showData.slice(0, 5)]
-            },
-            {
-              title: 'Popular Movies',
-              contentType: 'movie',
-              data: movieData.slice(0, 10)
-            },
-            {
-              title: 'Popular Shows',
-              contentType: 'show',
-              data: showData.slice(0, 10)
-            },
-          ];
-          break;
-        case ContentFilterType.MOVIES:
-          sections = [
-            {
-              title: 'New Releases',
-              contentType: 'movie',
-              data: movieData.slice(0, 10)
-            },
-            {
-              title: 'Action Movies',
-              contentType: 'movie',
-              data: movieData.filter((m: Movie) => m.genres.includes('Action')).slice(0, 10)
-            },
-            {
-              title: 'Sci-Fi Adventures',
-              contentType: 'movie',
-              data: movieData.filter((m: Movie) => m.genres.includes('Sci-Fi')).slice(0, 10)
-            },
-          ];
-          break;
-        case ContentFilterType.SHOWS:
-          sections = [
-            {
-              title: 'Top TV Shows',
-              contentType: 'show',
-              data: showData.slice(0, 10)
-            },
-            {
-              title: 'Drama Series',
-              contentType: 'show',
-              data: showData.filter((s: Show) => s.genres.includes('Drama')).slice(0, 10)
-            },
-            {
-              title: 'Comedy Series',
-              contentType: 'show',
-              data: showData.filter((s: Show) => s.genres.includes('Comedy')).slice(0, 10)
-            },
-          ];
-          break;
-        case ContentFilterType.NEW:
-          sections = [
-            {
-              title: 'New Arrivals',
-              contentType: 'mixed',
-              data: [...movieData.slice(0, 5), ...showData.slice(0, 5)]
-            },
-            {
-              title: 'Just Added Movies',
-              contentType: 'movie',
-              data: movieData.slice(0, 10)
-            },
-            {
-              title: 'Fresh TV Episodes',
-              contentType: 'show',
-              data: showData.slice(0, 10)
-            },
-          ];
-          break;
-        case ContentFilterType.TRENDING:
-          sections = [
-            {
-              title: 'Trending This Week',
-              contentType: 'mixed',
-              data: [...movieData.slice(5, 10), ...showData.slice(5, 10)]
-            },
-            {
-              title: 'Viral Movies',
-              contentType: 'movie',
-              data: movieData.slice(10, 20)
-            },
-            {
-              title: 'Buzzworthy Shows',
-              contentType: 'show',
-              data: showData.slice(10, 20)
-            },
-          ];
-          break;
-        case ContentFilterType.ORIGINALS:
-          sections = [
-            {
-              title: 'Rangbaj Originals',
-              contentType: 'mixed',
-              data: [...movieData.filter((m: Movie) => m.studio === 'Rangbaj Studios'), 
-                     ...showData.filter((s: Show) => s.network === 'Rangbaj Network')]
-            },
-            {
-              title: 'Award-Winning Originals',
-              contentType: 'mixed',
-              data: [...movieData.filter((m: Movie) => m.starRating >= 4.5).slice(0, 5),
-                     ...showData.filter((s: Show) => s.starRating >= 4.5).slice(0, 5)]
-            },
-          ];
-          break;
-      }
-      
-      return sections;
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
-    }
-  }
-);
-
-export const fetchFeaturedContent = createAsyncThunk(
-  'content/fetchFeaturedContent',
-  async (_, { rejectWithValue }) => {
-    try {
-      // Simulate API call with a delay
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Randomly select a movie or show as featured content
-      const isMovie = Math.random() > 0.5;
-      
-      if (isMovie) {
-        const randomIndex = Math.floor(Math.random() * movieData.length);
-        return {
-          id: movieData[randomIndex].id,
-          type: 'movie' as const
-        };
-      } else {
-        const randomIndex = Math.floor(Math.random() * showData.length);
-        return {
-          id: showData[randomIndex].id,
-          type: 'show' as const
-        };
-      }
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
-    }
-  }
-);
 
 const contentSlice = createSlice({
   name: 'content',
   initialState,
   reducers: {
-    setActiveFilter: (state, action: PayloadAction<ContentFilterType>) => {
+    setActiveFilter: (state: ContentState, action: PayloadAction<string>) => {
       state.activeFilter = action.payload;
     },
-    clearErrors: (state) => {
+    clearErrors: (state: ContentState) => {
       state.error = null;
+    },
+    clearAllContent: (state: ContentState) => {
+      // Reset content state to initial values on app start
+      state.movies = {};
+      state.shows = {};
+      state.contentSections = [];
+      state.heroSection = null;
+      state.allContentIds = [];
+      state.sectionsFetched = false;
+      state.loading = {
+        movies: false,
+        shows: false,
+        sections: false,
+      };
+      state.error = null;
+      state.featuredContent = null;
+      console.log('🧹 [REDUX] Content state cleared for fresh data loading');
     },
   },
   extraReducers: (builder) => {
     builder
-      // Handle fetchMovie
-      .addCase(fetchMovie.pending, (state) => {
+      // Handle fetchAllContentIds
+      .addCase(fetchAllContentIds.pending, (state: ContentState) => {
         state.loading.movies = true;
         state.error = null;
       })
-      .addCase(fetchMovie.fulfilled, (state, action) => {
+      .addCase(fetchAllContentIds.fulfilled, (state: ContentState, action: PayloadAction<string[]>) => {
         state.loading.movies = false;
-        // Add movie to state with ID as key
+        state.allContentIds = action.payload;
+      })
+      .addCase(fetchAllContentIds.rejected, (state: ContentState, action: PayloadAction<string | undefined>) => {
+        state.loading.movies = false;
+        state.error = action.payload || null;
+      })
+      // Handle fetchContentById
+      .addCase(fetchContentById.fulfilled, (state: ContentState, action: PayloadAction<any>) => {
+        if (action.payload.type === 'movie') {
+          state.movies[action.payload.data.id] = action.payload.data;
+        } else if (action.payload.type === 'show') {
+          state.shows[action.payload.data.id] = action.payload.data;
+        }
+      })
+      // Handle fetchMovie
+      .addCase(fetchMovie.pending, (state: ContentState) => {
+        state.loading.movies = true;
+        state.error = null;
+      })
+      .addCase(fetchMovie.fulfilled, (state: ContentState, action: PayloadAction<Movie>) => {
+        state.loading.movies = false;
         state.movies[action.payload.id] = action.payload;
+        console.log(`✅ [REDUX] Movie stored in state:`, { id: action.payload.id, title: action.payload.title });
       })
-      .addCase(fetchMovie.rejected, (state, action) => {
+      .addCase(fetchMovie.rejected, (state: ContentState, action: PayloadAction<string | undefined>) => {
         state.loading.movies = false;
-        state.error = action.payload as string;
+        state.error = action.payload || null;
+        console.error(`❌ [REDUX] Movie fetch failed:`, action.payload);
       })
-      
       // Handle fetchShow
-      .addCase(fetchShow.pending, (state) => {
+      .addCase(fetchShow.pending, (state: ContentState) => {
         state.loading.shows = true;
         state.error = null;
       })
-      .addCase(fetchShow.fulfilled, (state, action) => {
+      .addCase(fetchShow.fulfilled, (state: ContentState, action: PayloadAction<Show>) => {
         state.loading.shows = false;
-        // Add show to state with ID as key
         state.shows[action.payload.id] = action.payload;
+        console.log(`✅ [REDUX] Show stored in state:`, { id: action.payload.id, title: action.payload.title });
       })
-      .addCase(fetchShow.rejected, (state, action) => {
+      .addCase(fetchShow.rejected, (state: ContentState, action: PayloadAction<string | undefined>) => {
         state.loading.shows = false;
-        state.error = action.payload as string;
+        state.error = action.payload || null;
+        console.error(`❌ [REDUX] Show fetch failed:`, action.payload);
       })
-      
       // Handle fetchContentSections
-      .addCase(fetchContentSections.pending, (state) => {
+      .addCase(fetchContentSections.pending, (state: ContentState) => {
         state.loading.sections = true;
         state.error = null;
+        state.sectionsFetched = true;
       })
-      .addCase(fetchContentSections.fulfilled, (state, action) => {
+      .addCase(fetchContentSections.fulfilled, (state: ContentState, action: PayloadAction<ContentSectionLite[]>) => {
         state.loading.sections = false;
-        state.contentSections = action.payload;
+        
+        // Separate hero and standard sections
+        const heroSections = action.payload.filter(s => s.type === 'hero');
+        const standardSections = action.payload.filter(s => s.type === 'standard');
+        
+        // Store hero section (should only be one)
+        state.heroSection = heroSections.length > 0 ? heroSections[0] : null;
+        
+        // Store standard sections
+        state.contentSections = standardSections;
+        
+        console.log('🎯 [REDUX] Content sections stored in state:', {
+          heroSection: state.heroSection ? { id: state.heroSection.id, title: state.heroSection.title, contentIdsCount: state.heroSection.contentIds.length } : null,
+          standardSectionsCount: standardSections.length,
+          sections: standardSections.map(s => ({ id: s.id, title: s.title, contentIdsCount: s.contentIds.length }))
+        });
       })
-      .addCase(fetchContentSections.rejected, (state, action) => {
+      .addCase(fetchContentSections.rejected, (state: ContentState, action: PayloadAction<string | undefined>) => {
         state.loading.sections = false;
-        state.error = action.payload as string;
-      })
-      
-      // Handle fetchFeaturedContent
-      .addCase(fetchFeaturedContent.fulfilled, (state, action) => {
-        state.featuredContent = action.payload;
+        state.error = action.payload || null;
+        console.error('❌ [REDUX] Content sections fetch failed:', action.payload);
+        
+        // Fallback: Create hardcoded sections using available content
+        const movieIds = Object.keys(state.movies);
+        const showIds = Object.keys(state.shows);
+        const allIds = [...movieIds, ...showIds];
+        
+        if (allIds.length > 0) {
+          console.log('🔄 [REDUX] Creating fallback sections with available content');
+          state.contentSections = [
+            {
+              id: 'trending-now',
+              title: 'Trending Now',
+              contentIds: allIds.slice(0, Math.min(6, allIds.length)),
+              type: 'standard' as const
+            },
+            {
+              id: 'popular-movies',
+              title: 'Popular Movies',
+              contentIds: movieIds.slice(0, Math.min(6, movieIds.length)),
+              type: 'standard' as const
+            },
+            {
+              id: 'popular-shows',
+              title: 'Popular Shows',
+              contentIds: showIds.slice(0, Math.min(6, showIds.length)),
+              type: 'standard' as const
+            }
+          ].filter(section => section.contentIds.length > 0);
+        }
       });
   },
 });
 
-export const { setActiveFilter, clearErrors } = contentSlice.actions;
+export const { setActiveFilter, clearErrors, clearAllContent } = contentSlice.actions;
 
 // Selectors
-export const selectMovieById = (state: RootState, movieId: string) => state.content.movies[movieId];
-export const selectShowById = (state: RootState, showId: string) => state.content.shows[showId];
-export const selectContentSections = (state: RootState) => state.content.contentSections;
+export const selectAllContentIds = (state: RootState) => (state.content as ContentState).allContentIds;
+
+export const selectMovieById = (state: RootState, movieId: string) => (state.content as ContentState).movies[movieId];
+export const selectShowById = (state: RootState, showId: string) => (state.content as ContentState).shows[showId];
+
+import { createSelector } from '@reduxjs/toolkit';
+
+// Memoized selector: Returns UI-ready sections with full content objects
+export const selectContentSections = createSelector(
+  [
+    (state: RootState) => (state.content as ContentState).contentSections,
+    (state: RootState) => (state.content as ContentState).movies,
+    (state: RootState) => (state.content as ContentState).shows,
+  ],
+  (contentSections, movies, shows) => {
+    console.log('🔍 [SELECTOR] selectContentSections called with:', {
+      contentSectionsCount: contentSections?.length || 0,
+      moviesCount: Object.keys(movies || {}).length,
+      showsCount: Object.keys(shows || {}).length,
+      contentSections: contentSections?.map(s => ({ id: s.id, title: s.title, contentIdsCount: s.contentIds?.length || 0 })) || []
+    });
+    
+    const result = (contentSections || []).map((section) => {
+      const mappedContents = (section.contentIds || []).map((cid: string) => {
+        const content = movies[cid] || shows[cid];
+        if (!content) {
+          console.log(`⚠️ [SELECTOR] Content ID ${cid} not found in movies or shows`);
+        }
+        return content;
+      }).filter(Boolean);
+      
+      console.log(`📋 [SELECTOR] Section "${section.title}" mapped:`, {
+        originalContentIds: section.contentIds?.length || 0,
+        mappedContents: mappedContents.length,
+        contentTitles: mappedContents.map(c => c.title).slice(0, 3)
+      });
+      
+      return {
+        id: section.id,
+        title: section.title,
+        contents: mappedContents,
+      };
+    });
+    
+    console.log('✅ [SELECTOR] selectContentSections result:', {
+      sectionsCount: result.length,
+      totalContents: result.reduce((sum, s) => sum + s.contents.length, 0)
+    });
+    
+    return result;
+  }
+);
+
 export const selectActiveFilter = (state: RootState) => state.content.activeFilter;
 export const selectIsLoading = (state: RootState) => state.content.loading;
 export const selectError = (state: RootState) => state.content.error;
 export const selectFeaturedContent = (state: RootState) => state.content.featuredContent;
+
+// Selector for ALL hero section content (for carousel)
+export const selectAllHeroContent = createSelector(
+  [
+    (state: RootState) => (state.content as ContentState).heroSection,
+    (state: RootState) => (state.content as ContentState).movies,
+    (state: RootState) => (state.content as ContentState).shows,
+  ],
+  (heroSection, movies, shows) => {
+    if (!heroSection || !heroSection.contentIds || heroSection.contentIds.length === 0) {
+      console.log('⚠️ [SELECTOR] No hero section available');
+      return [];
+    }
+    
+    console.log('🎠 [SELECTOR] selectAllHeroContent called with:', {
+      heroSectionId: heroSection.id,
+      heroSectionTitle: heroSection.title,
+      contentIdsCount: heroSection.contentIds.length,
+      moviesCount: Object.keys(movies || {}).length,
+      showsCount: Object.keys(shows || {}).length,
+    });
+    
+    // Map all content IDs to full content objects
+    const allHeroContent = heroSection.contentIds
+      .map(id => movies[id] || shows[id])
+      .filter(content => content !== undefined);
+    
+    console.log('✅ [SELECTOR] All hero content found:', {
+      totalItems: allHeroContent.length,
+      itemsWithVideo: allHeroContent.filter(c => c.video).length,
+      titles: allHeroContent.map(c => c.title)
+    });
+    
+    return allHeroContent;
+  }
+);
+
+// Selector for hero section with full content objects (single item - for backward compatibility)
+export const selectHeroContent = createSelector(
+  [
+    (state: RootState) => (state.content as ContentState).heroSection,
+    (state: RootState) => (state.content as ContentState).movies,
+    (state: RootState) => (state.content as ContentState).shows,
+  ],
+  (heroSection, movies, shows) => {
+    if (!heroSection || !heroSection.contentIds || heroSection.contentIds.length === 0) {
+      console.log('⚠️ [SELECTOR] No hero section available');
+      return null;
+    }
+    
+    console.log('🦸 [SELECTOR] selectHeroContent called with:', {
+      heroSectionId: heroSection.id,
+      heroSectionTitle: heroSection.title,
+      contentIdsCount: heroSection.contentIds.length,
+      moviesCount: Object.keys(movies || {}).length,
+      showsCount: Object.keys(shows || {}).length,
+    });
+    
+    // Try to get the first content item from hero section
+    const heroContentId = heroSection.contentIds[0];
+    let content = movies[heroContentId] || shows[heroContentId];
+    
+    // FALLBACK: If hero content has no video, find first content WITH video
+    if (content && !content.video) {
+      console.log(`⚠️ [SELECTOR] Hero content "${content.title}" has no video, searching for fallback...`);
+      
+      // Search through all content for one with a video
+      const allContent = [...Object.values(movies), ...Object.values(shows)];
+      const contentWithVideo = allContent.find(c => c.video && c.video.url);
+      
+      if (contentWithVideo) {
+        console.log(`✅ [SELECTOR] Using fallback hero content: "${contentWithVideo.title}" (has video)`);
+        content = contentWithVideo;
+      } else {
+        console.log(`⚠️ [SELECTOR] No content with video found, using original hero content`);
+      }
+    }
+    
+    if (!content) {
+      console.log(`⚠️ [SELECTOR] Hero content ID ${heroContentId} not found in movies or shows`);
+      return null;
+    }
+    
+    console.log('✅ [SELECTOR] Hero content found:', { 
+      id: content.id, 
+      title: content.title,
+      hasVideo: !!content.video,
+      videoUrl: content.video?.url || 'No video'
+    });
+    
+    return content;
+  }
+);
 
 export default contentSlice.reducer;

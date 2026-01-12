@@ -20,16 +20,9 @@ export default function SeeAllButton({ title, section, contentType, count }: See
   const handlePress = () => {
     // Create URL-safe section and title
     const encodedTitle = encodeURIComponent(title);
-    const encodedSection = encodeURIComponent(section.toLowerCase());
     
     // Navigate to the more content page with appropriate parameters
-    router.push({
-      pathname: `/content/more/${encodedSection}`,
-      params: { 
-        title: encodedTitle,
-        type: contentType
-      }
-    });
+    router.push(`/content/more/${encodedTitle}?section=${section.toLowerCase()}&type=${contentType}`);
   };
   
   return (

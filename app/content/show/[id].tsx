@@ -40,8 +40,11 @@ export default function ShowContentScreen() {
   
   // Handle play button press
   const handlePlay = () => {
-    console.log('Playing show:', id);
-    // In a real app, navigate to video player or start playback
+    console.log('📺 [ShowDetail] Playing show:', id, 'Video URL:', show?.video?.url);
+    router.push({
+      pathname: `/content/[id]`,
+      params: { id: id as string, type: 'show' }
+    });
   };
   
   // Handle trailer button press
@@ -170,9 +173,9 @@ export default function ShowContentScreen() {
                 </View>
                 
                 <View style={styles.genreContainer}>
-                  {show.genres.map((genre, index) => (
+                  {Array.isArray(show.genres) && show.genres.map((genre, index) => (
                     <View key={index} style={[styles.genreTag, {borderColor: border}]}>
-                      <Text style={styles.genreText}>{genre}</Text>
+                      <Text style={styles.genreText}>{typeof genre === 'string' ? genre : String(genre || 'Genre')}</Text>
                     </View>
                   ))}
                 </View>
@@ -216,10 +219,10 @@ export default function ShowContentScreen() {
         <View style={[styles.descriptionContainer, {borderBottomColor: border}]}>
           <ThemedText style={styles.descriptionText}>{show.description}</ThemedText>
           <Text style={[styles.directorText, {color: textSecondary}]}>
-            Creator: <Text style={[styles.directorName, {color: text}]}>{show.creator ?? 'Unknown'}</Text>
+            Creator: <Text style={[styles.directorName, {color: text}]}>{typeof show.creator === 'string' ? show.creator : String(show.creator || 'Unknown')}</Text>
           </Text>
           <Text style={[styles.directorText, {color: textSecondary, marginTop: 4}]}>
-            Network: <Text style={[styles.directorName, {color: text}]}>{show.network ?? 'Unknown'}</Text>
+            Network: <Text style={[styles.directorName, {color: text}]}>{typeof show.network === 'string' ? show.network : String(show.network || 'Unknown')}</Text>
           </Text>
           <View style={styles.episodesInfo}>
             <Text style={[styles.episodesText, {color: textSecondary}]}>
@@ -316,6 +319,7 @@ export default function ShowContentScreen() {
 }
 
 const { width, height } = Dimensions.get('window');
+const HERO_HEIGHT = Math.round(width * 9 / 16);
 
 const styles = StyleSheet.create({
   container: {
@@ -338,7 +342,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroContainer: {
-    height: height * 0.65, // Increase height for a more immersive hero
+    height: HERO_HEIGHT,
     width: '100%',
     position: 'relative',
   },

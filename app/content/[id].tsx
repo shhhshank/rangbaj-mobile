@@ -9,6 +9,9 @@ import useBackPressed from '@/hooks/useBackPressed';
 import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { Modal, ScrollView, Switch } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '@/redux/store';
+import { fetchMovie, fetchShow, selectMovieById, selectShowById } from '@/redux/slices/contentSlice';
 
 export default function ContentPlayerScreen() {
   const video = useRef<Video>(null);
@@ -19,14 +22,30 @@ export default function ContentPlayerScreen() {
   const [resizeMode, setResizeMode] = useState<ResizeMode>(ResizeMode.CONTAIN);
   const controlsOpacity = useSharedValue(1);
   const navigation = useNavigation();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const dispatch = useDispatch();
+  const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
 
-  // We'll use mock content for now
-  const mockContent = {
-    title: "The Universe's Edge",
-    description: "A journey beyond the known universe reveals secrets that challenge our understanding of reality.",
-    source: "https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8?ref=developerinsider.co",
-  };
+  // Get content from Redux store
+  const movie = useSelector((state: RootState) => selectMovieById(state, id));
+  const show = useSelector((state: RootState) => selectShowById(state, id));
+  const content = movie || show;
+
+  // Fetch content if not in store
+  useEffect(() => {
+    if (id && !content) {
+      console.log('🎬 [VideoPlayer] Fetching content for ID:', id, 'type:', type);
+      if (type === 'show') {
+        dispatch(fetchShow(id));
+      } else {
+        dispatch(fetchMovie(id));
+      }
+    }
+  }, [dispatch, id, type, content]);
+
+  // Fallback content for when data is loading or missing
+  const videoSource = content?.video?.url || "https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8?ref=developerinsider.co";
+  const contentTitle = content?.title || "Loading...";
+  const contentDescription = content?.description || "Loading content...";
 
   // Use theme colors
   const background = useThemeColor('background');
@@ -203,7 +222,7 @@ export default function ContentPlayerScreen() {
           >
             <Ionicons name="arrow-back" size={24} color={text} />
           </TouchableOpacity>
-          <Text style={[styles.videoTitle, { color: text }]}>{mockContent.title}</Text>
+          <Text style={[styles.videoTitle, { color: text }]}>{contentTitle}</Text>
           <TouchableOpacity onPress={() => setResizeMode(
             resizeMode === ResizeMode.CONTAIN ? ResizeMode.COVER : ResizeMode.CONTAIN
           )}>
@@ -410,7 +429,7 @@ export default function ContentPlayerScreen() {
           <Video
             ref={video}
             style={styles.video}
-            source={{ uri: mockContent.source }}
+            source={{ uri: videoSource }}
             resizeMode={resizeMode}
             isLooping
             shouldPlay

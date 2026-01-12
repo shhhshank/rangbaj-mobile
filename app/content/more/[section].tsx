@@ -21,9 +21,9 @@ import {
   selectContentSections,
   selectIsLoading,
   selectError,
-  fetchContentSections,
-  ContentFilterType
+  fetchContentSections
 } from '@/redux/slices/contentSlice';
+import { ContentFilterType } from '@/redux/ContentFilterType';
 import { Movie, Show } from '@/redux/types';
 import { useScrollY } from '@/hooks/useScrollY';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,7 +33,10 @@ type SectionTypes = 'trending' | 'popular' | 'originals' | 'new' | 'recommended'
 
 export default function MoreContentScreen() {
   const router = useRouter();
-  const { section, title, type } = useLocalSearchParams();
+  const { section: urlSection, title, type } = useLocalSearchParams();
+  
+  // Get section from either URL parameter or query parameter
+  const section = urlSection || useLocalSearchParams().section;
   const dispatch = useDispatch<AppDispatch>();
   const scrollY = useScrollY();
   const [refreshing, setRefreshing] = useState(false);
@@ -52,24 +55,25 @@ export default function MoreContentScreen() {
 
   // Find the section data based on the section parameter
   useEffect(() => {
-    if (section) {
-      const sectionKey = section as string;
+    if (section || title) {
+      const sectionKey = (section as string) || (title as string);
       const filterType = mapSectionToFilterType(sectionKey);
       
       // If we don't have content, fetch it
       if (!contentSections || contentSections.length === 0) {
-        dispatch(fetchContentSections(filterType));
+        dispatch(fetchContentSections());
       } else {
         // Find the relevant section from our content
         let foundContent: any[] = [];
         
         contentSections.forEach(contentSection => {
-          // Match by section key or section title that contains the key
-          if (
-            contentSection.title.toLowerCase().includes(sectionKey.toLowerCase()) ||
-            (type && contentSection.contentType === type)
-          ) {
-            foundContent = [...foundContent, ...contentSection.data];
+          // Match by section key, section title, or content type
+          const titleMatch = contentSection.title.toLowerCase().includes(sectionKey.toLowerCase());
+          const sectionMatch = section && contentSection.title.toLowerCase().includes((section as string).toLowerCase());
+          const typeMatch = type && contentSection.contentType === type;
+          
+          if (titleMatch || sectionMatch || typeMatch) {
+            foundContent = [...foundContent, ...contentSection.contents];
           }
         });
         
@@ -81,7 +85,7 @@ export default function MoreContentScreen() {
         setContentItems(uniqueContent);
       }
     }
-  }, [section, contentSections, dispatch, type]);
+  }, [section, title, contentSections, dispatch, type]);
 
   // Map section name to ContentFilterType
   const mapSectionToFilterType = (sectionKey: string): ContentFilterType => {
@@ -112,7 +116,7 @@ export default function MoreContentScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     const filterType = mapSectionToFilterType(section as string);
-    await dispatch(fetchContentSections(filterType));
+    await dispatch(fetchContentSections());
     setRefreshing(false);
   };
 
@@ -218,7 +222,7 @@ export default function MoreContentScreen() {
             style={[styles.retryButton, { backgroundColor: primary }]}
             onPress={() => {
               const filterType = mapSectionToFilterType(section as string);
-              dispatch(fetchContentSections(filterType));
+              dispatch(fetchContentSections());
             }}
           >
             <Text style={styles.retryButtonText}>Retry</Text>

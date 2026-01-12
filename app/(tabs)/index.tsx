@@ -2,7 +2,7 @@ import PromotionSlider from '@/components/home/PromotionSlider';
 import { ThemedView } from '@/components/common/ThemedView';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { View, StyleSheet, Platform, ScrollView, Text, Image, TouchableOpacity, Dimensions, StatusBar, ActivityIndicator, Animated } from 'react-native';
-import ContentFilterChips, { ContentFilter } from '@/components/home/ContentFilterChips';
+import ContentFilterChips from '@/components/home/ContentFilterChips';
 import GroupContentThumb from '@/components/common/GroupContentThumb';
 import HorizontalList from '@/components/common/HorizontalList';
 import { useEffect, useState, useRef } from 'react';
@@ -12,24 +12,30 @@ import { Link, useRouter, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AntDesign, Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import HeroBanner, { FeaturedContent } from '@/components/home/HeroBanner';
+import HeroCarousel from '@/components/home/HeroCarousel';
 import { HEADER_HEIGHT } from '@/components/common/Header';
 import { useScrollY } from '@/hooks/useScrollY';
 import Header from '@/components/common/Header';
 import { useDispatch, useSelector } from 'react-redux';
+import TokenExpirySimulator from '@/components/common/TokenExpirySimulator';
+import AuthDebugPanel from '@/components/common/AuthDebugPanel';
+import { DEBUG_CONFIG } from '@/constants/DebugConfig';
 import SeeAllButton from '@/components/common/SeeAllButton';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
+  fetchAllContentIds, 
+  fetchContentById, 
   fetchContentSections, 
-  fetchFeaturedContent, 
-  setActiveFilter, 
   selectContentSections, 
-  selectIsLoading, 
-  selectError, 
-  selectFeaturedContent,
+  selectHeroContent,
+  selectAllHeroContent,
+  selectIsLoading,
+  selectError,
+  selectAllContentIds,
   selectActiveFilter,
-  ContentFilterType, 
-  fetchMovie,
-  fetchShow
+  setActiveFilter
 } from '@/redux/slices/contentSlice';
+import { ContentFilterType as ContentFilter } from '@/redux/ContentFilterType';
 import { AppDispatch, RootState } from '@/redux/store';
 import { Movie, Show, Trailer } from '@/redux/types';
 import TrailerSection from '@/components/trailers/TrailerSection';
@@ -163,9 +169,9 @@ function ContentItem({ item, onPress }: { item: any, onPress: () => void }) {
       />
       <View style={styles.contentInfo}>
         <Text style={[styles.contentTitle, { color: '#fff' }]} numberOfLines={1}>
-          {item.title}
+          {typeof item.title === 'string' ? item.title : String(item.title || 'Untitled')}
         </Text>
-        {item.starRating && (
+        {item.starRating && typeof item.starRating === 'number' && (
           <View style={styles.ratingContainer}>
             <AntDesign name="star" size={10} color="#FFD700" />
             <Text style={[styles.ratingText, { color: '#fff' }]}>{item.starRating}</Text>
@@ -200,8 +206,11 @@ function ContentSection({ title, data, onItemPress }: { title: string, data: any
   // Extract section identifier from title
   const sectionId = title.toLowerCase().split(' ')[0];
 
+  console.log('Section ID:', sectionId);
+
   const navigateToMore = () => {
-    router.push(`/content/more/${encodeURIComponent(title)}?type=${contentType}`);
+    const encodedTitle = encodeURIComponent(title);
+    router.push(`/content/more/${encodedTitle}?section=${sectionId}&type=${contentType}`);
   };
 
   return (
@@ -239,72 +248,137 @@ export default function HomeScreen() {
   const router = useRouter();
   const scrollY = useScrollY();
   const dispatch = useDispatch<AppDispatch>();
+  const [heroVisible, setHeroVisible] = useState(true);
+  
+  console.log('🎨 [UI] HomeScreen render started');
   
   // Redux selectors
   const contentSections = useSelector(selectContentSections);
   const loading = useSelector(selectIsLoading);
   const error = useSelector(selectError);
-  const featuredContent = useSelector(selectFeaturedContent);
+  const heroContent = useSelector(selectHeroContent);
+  const allHeroContent = useSelector(selectAllHeroContent); // All hero items for carousel
   const activeFilter = useSelector(selectActiveFilter);
+  const allContentIds = useSelector(selectAllContentIds);
+  const movies = useSelector((state: RootState) => state.content.movies);
+  const shows = useSelector((state: RootState) => state.content.shows);
+  const sectionsFetched = useSelector((state: RootState) => state.content.sectionsFetched);
   
-  // Get featured movie or show data if available
-  const featuredItem = useSelector((state: RootState) => {
-    if (!featuredContent) return null;
-    
-    return featuredContent.type === 'movie' 
-      ? state.content.movies[featuredContent.id] 
-      : state.content.shows[featuredContent.id];
+  // Log current Redux state
+  console.log('🎬 [Redux] Current state:', {
+    contentSectionsCount: contentSections?.length || 0,
+    allContentIdsCount: allContentIds?.length || 0,
+    moviesCount: Object.keys(movies || {}).length,
+    showsCount: Object.keys(shows || {}).length,
+    heroContent: heroContent ? { id: heroContent.id, title: heroContent.title } : null,
+    loading: {
+      movies: loading?.movies,
+      shows: loading?.shows,
+      sections: loading?.sections
+    },
+    error,
+    activeFilter
   });
   
-  // Map ContentFilter to ContentFilterType
-  const mapFilterType = (filter: ContentFilter): ContentFilterType => {
-    switch (filter) {
-      case ContentFilter.ALL: return ContentFilterType.ALL;
-      case ContentFilter.MOVIES: return ContentFilterType.MOVIES;
-      case ContentFilter.SHOWS: return ContentFilterType.SHOWS;
-      case ContentFilter.NEW: return ContentFilterType.NEW;
-      case ContentFilter.TRENDING: return ContentFilterType.TRENDING;
-      case ContentFilter.ORIGINALS: return ContentFilterType.ORIGINALS;
-      default: return ContentFilterType.ALL;
-    }
-  };
+  // Determine content type for hero banner
+  const heroContentType = heroContent ? 
+    ('seasons' in heroContent ? 'show' : 'movie') as 'movie' | 'show' : null;
   
-  // Convert ContentFilterType to ContentFilter
-  const mapToContentFilter = (filterType: ContentFilterType): ContentFilter => {
-    switch (filterType) {
-      case ContentFilterType.ALL: return ContentFilter.ALL;
-      case ContentFilterType.MOVIES: return ContentFilter.MOVIES;
-      case ContentFilterType.SHOWS: return ContentFilter.SHOWS;
-      case ContentFilterType.NEW: return ContentFilter.NEW;
-      case ContentFilterType.TRENDING: return ContentFilter.TRENDING;
-      case ContentFilterType.ORIGINALS: return ContentFilter.ORIGINALS;
-      default: return ContentFilter.ALL;
-    }
-  };
-  
-  // Set the active filter and fetch content
-  const handleFilterChange = (filter: ContentFilter) => {
-    const filterType = mapFilterType(filter);
-    dispatch(setActiveFilter(filterType));
-    dispatch(fetchContentSections(filterType));
-  };
-  
-  // Initial data loading
-  useEffect(() => {
-    dispatch(fetchFeaturedContent());
-    dispatch(fetchContentSections(ContentFilterType.ALL));
-  }, [dispatch]);
-  
-  // Load featured content data
-  useEffect(() => {
-    if (featuredContent) {
-      if (featuredContent.type === 'movie') {
-        dispatch(fetchMovie(featuredContent.id));
-      } else {
-        dispatch(fetchShow(featuredContent.id));
+  // Handle scroll event to track hero banner visibility
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { 
+      useNativeDriver: false,
+      listener: (event: any) => {
+        const scrollPosition = event.nativeEvent.contentOffset.y;
+        const heroThreshold = 400; // Pixels scrolled before pausing video
+        const isVisible = scrollPosition < heroThreshold;
+        
+        if (isVisible !== heroVisible) {
+          setHeroVisible(isVisible);
+          console.log(`👁️ [HomeScreen] Hero banner visibility: ${isVisible ? 'visible' : 'hidden'}`);
+        }
       }
     }
-  }, [dispatch, featuredContent]);
+  );
+  
+
+
+const handleFilterChange = (filter: ContentFilter) => {
+  dispatch(setActiveFilter(filter));
+  dispatch(fetchContentSections());
+};
+  
+  // Step 1: Initial data loading - fetch all content IDs first
+  useEffect(() => {
+    console.log('🚀 [DataFlow] Step 1: Starting - Fetching all content IDs');
+    dispatch(fetchAllContentIds());
+  }, [dispatch]);
+
+  // Step 2: When content IDs are available, fetch details for each ID
+  useEffect(() => {
+    console.log('📊 [DataFlow] Step 2: Content IDs received:', {
+      allContentIds,
+      count: allContentIds?.length || 0,
+      isArray: Array.isArray(allContentIds),
+      moviesLoaded: Object.keys(movies || {}).length,
+      showsLoaded: Object.keys(shows || {}).length
+    });
+    
+    if (allContentIds && Array.isArray(allContentIds) && allContentIds.length > 0) {
+      let fetchCount = 0;
+      allContentIds.forEach((contentId: string) => {
+        const hasMovie = movies && movies[contentId];
+        const hasShow = shows && shows[contentId];
+        const alreadyExists = hasMovie || hasShow;
+        
+        console.log(`🔍 [DataFlow] Checking content ID ${contentId}:`, {
+          hasMovie: !!hasMovie,
+          hasShow: !!hasShow,
+          alreadyExists,
+          willFetch: !alreadyExists
+        });
+        
+        // Only fetch if we don't already have this content
+        if (movies && shows && !alreadyExists) {
+          console.log(`🌐 [DataFlow] Fetching content details for ID: ${contentId}`);
+          dispatch(fetchContentById(contentId));
+          fetchCount++;
+        } else {
+          console.log(`⏭️ [DataFlow] Skipping ${contentId} - already exists`);
+        }
+      });
+      console.log(`📈 [DataFlow] Dispatched ${fetchCount} content detail requests`);
+    }
+  }, [allContentIds, movies, shows, dispatch]);
+
+  // Step 3: When all content details are loaded, fetch content sections
+  useEffect(() => {
+    if (allContentIds && movies && shows && contentSections) {
+      console.log('🎬 [DataFlow] Step 3: Checking if ready for content sections:', {
+        allContentIds: allContentIds?.length || 0,
+        moviesLoaded: Object.keys(movies || {}).length,
+        showsLoaded: Object.keys(shows || {}).length,
+      });
+      
+      const totalLoadedContent = Object.keys(movies).length + Object.keys(shows).length;
+      const hasAllContent = allContentIds.length > 0 && totalLoadedContent >= allContentIds.length;
+      
+      console.log('📊 [DataFlow] Content loading progress:', {
+        totalExpected: allContentIds.length,
+        totalLoaded: totalLoadedContent,
+        hasAllContent,
+        sectionsAlreadyLoaded: contentSections.length > 0
+      });
+      
+      // FIX: Only fetch sections if we haven't tried yet and we're not currently loading
+      if (hasAllContent && !sectionsFetched && !loading.sections) {
+        console.log('🎬 [DataFlow] Step 3: All content loaded, fetching content sections...');
+        dispatch(fetchContentSections());
+      }
+    }
+  }, [allContentIds, movies, shows, contentSections, sectionsFetched, loading.sections, dispatch]);
+
 
   // Handle content press
   const handleContentPress = (id: string, type?: 'movie' | 'show') => {
@@ -321,10 +395,10 @@ export default function HomeScreen() {
     try {
       // Pre-fetch the content data before navigation
       if (finalType === 'movie') {
-        dispatch(fetchMovie(id));
+        
         router.push(`/content/movie/${id}`);
       } else {
-        dispatch(fetchShow(id));
+        
         router.push(`/content/show/${id}`);
       }
     } catch (error) {
@@ -332,28 +406,13 @@ export default function HomeScreen() {
     }
   };
 
-  // Handle featured content play button press
-  const handleFeaturedPlay = (id: string, type: 'movie' | 'show') => {
+  // Handle hero banner info button press
+  const handleHeroInfo = (id: string, type: 'movie' | 'show') => {
     if (type === 'movie') {
       router.push(`/content/movie/${id}`);
     } else {
       router.push(`/content/show/${id}`);
     }
-  };
-
-  // Handle featured content info button press
-  const handleFeaturedInfo = (id: string, type: 'movie' | 'show') => {
-    if (type === 'movie') {
-      router.push(`/content/movie/${id}`);
-    } else {
-      router.push(`/content/show/${id}`);
-    }
-  };
-
-  // Handle add to list
-  const handleAddToList = (id: string) => {
-    // Will implement this later with a proper My List feature
-    console.log('Adding to my list:', id);
   };
 
   // Color for text elements based on theme
@@ -362,22 +421,67 @@ export default function HomeScreen() {
   const background = useThemeColor('background');
   const primary = useThemeColor('primary');
   
-  // Create a featured content object for hero banner if available
-  const heroContent: FeaturedContent | null = featuredItem ? {
-    id: featuredItem.id,
-    title: featuredItem.title,
-    description: featuredItem.description,
-    thumbnailUrl: featuredItem.coverUrl,
-    previewUrl: 'https://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4', // Placeholder
-    year: featuredItem.releaseYear,
-    maturityRating: featuredItem.rating,
-    duration: 'duration' in featuredItem ? featuredItem.duration : `${featuredItem.seasons} Seasons`,
-    genres: featuredItem.genres,
-    isOriginal: true,
-    isNew: true,
-    isTopRated: featuredItem.starRating > 4.5,
-    type: featuredContent?.type || 'movie'
+  // Create featured content array for hero carousel
+  const heroCarouselContent: FeaturedContent[] = allHeroContent.map(content => {
+    const contentType = 'seasons' in content ? 'show' : 'movie';
+    return {
+      id: content.id,
+      title: content.title,
+      description: content.description,
+      thumbnailUrl: content.coverUrl,
+      videoUrl: content.video?.url || null,
+      year: content.releaseYear,
+      maturityRating: content.rating,
+      duration: contentType === 'movie' && 'duration' in content ? content.duration : `${'seasons' in content ? content.seasons : 1} Seasons`,
+      genres: content.genres,
+      isOriginal: content.isOriginal || false,
+      isNew: content.isNew || false,
+      isTopRated: content.starRating > 4.5,
+      type: contentType
+    };
+  });
+
+  // Create a featured content object for hero banner if available (backward compatibility)
+  const heroBannerContent: FeaturedContent | null = heroContent && heroContentType ? {
+    id: heroContent.id,
+    title: heroContent.title,
+    description: heroContent.description,
+    thumbnailUrl: heroContent.coverUrl,
+    videoUrl: heroContent.video?.url || null,
+    year: heroContent.releaseYear,
+    maturityRating: heroContent.rating,
+    duration: heroContentType === 'movie' && 'duration' in heroContent ? heroContent.duration : `${'seasons' in heroContent ? heroContent.seasons : 1} Seasons`,
+    genres: heroContent.genres,
+    isOriginal: heroContent.isOriginal || false,
+    isNew: heroContent.isNew || false,
+    isTopRated: heroContent.starRating > 4.5,
+    type: heroContentType
   } : null;
+  
+  // Debug logging for hero content
+  useEffect(() => {
+    if (heroContent) {
+      console.log('🦸 [HomeScreen] Hero Content Details:', {
+        id: heroContent.id,
+        title: heroContent.title,
+        hasVideo: !!heroContent.video,
+        videoUrl: heroContent.video?.url || 'No video URL',
+        videoObject: heroContent.video
+      });
+    }
+    
+    if (heroBannerContent) {
+      console.log('🎬 [HomeScreen] Hero Banner Content Being Passed:', {
+        id: heroBannerContent.id,
+        title: heroBannerContent.title,
+        videoUrl: heroBannerContent.videoUrl,
+        thumbnailUrl: heroBannerContent.thumbnailUrl,
+        hasVideoUrl: !!heroBannerContent.videoUrl
+      });
+    } else {
+      console.log('⚠️ [HomeScreen] No hero banner content available');
+    }
+  }, [heroContent, heroBannerContent]);
 
   return (
     <ThemedView style={styles.container}>
@@ -398,7 +502,7 @@ export default function HomeScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: primary }]}
-            onPress={() => dispatch(fetchContentSections(activeFilter))}
+            onPress={() => dispatch(fetchContentSections())}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
@@ -408,19 +512,15 @@ export default function HomeScreen() {
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
+          onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          {/* Hero Banner */}
-          {heroContent && (
-            <HeroBanner
-              featured={heroContent}
-              onPlay={(id, type) => handleFeaturedPlay(id, type)}
-              onInfoPress={(id, type) => handleFeaturedInfo(id, type)}
-              onAddToList={(id) => handleAddToList(id)}
+          {/* Hero Carousel */}
+          {heroCarouselContent.length > 0 && (
+            <HeroCarousel
+              heroContent={heroCarouselContent}
+              onInfoPress={(id, type) => handleHeroInfo(id, type)}
+              isVisible={heroVisible}
             />
           )}
           
@@ -428,63 +528,27 @@ export default function HomeScreen() {
           
           <View style={styles.mainContent}>
             {/* Trailers Section */}
-            <TrailerSection
-              title="Latest Trailers"
-              trailers={trailersData}
-              trailerSize="medium"
-              onTrailerPress={(trailer) => {
-                console.log(`Playing trailer: ${trailer.title}`);
-                // Navigate to trailer player screen using correct Expo Router syntax
-                router.push({
-                  pathname: `/trailers/[id]`,
-                  params: { id: trailer.id }
-                });
-              }}
-            />
+           
             
             {/* Continue Watching (mock data) */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: text }]}>Continue Watching</Text>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.horizontalScrollView}
-                contentContainerStyle={styles.sectionScrollContainer}
-              >
-                {continueWatchingData.map((item) => (
-                  <ContinueWatchingItem
-                    key={item.id}
-                    item={item}
-                    onPress={() => handleContentPress(item.id, item.type as 'movie' | 'show')}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-            
-            <View style={styles.filterSpacerTop} />
-            
-            {/* Content Filter Chips */}
-            <ContentFilterChips 
-              activeFilter={mapToContentFilter(activeFilter)} 
-              onFilterChange={handleFilterChange} 
-            />
-            
-            <View style={styles.filterSpacerBottom} />
             
             {/* Dynamic Content Sections */}
-            {contentSections.map((section, index) => (
+            {contentSections.map((section, idx) => (
               <ContentSection 
-                key={index}
+                key={section.id || idx}
                 title={section.title}
-                data={section.data}
+                data={section.contents}
                 onItemPress={handleContentPress}
               />
             ))}
           </View>
         </ScrollView>
       )}
+      
+      {/* Debug Components - Only in development */}
+      {/* Uncomment these to enable debug tools for testing token refresh */}
+      {/* {__DEV__ && DEBUG_CONFIG.FAST_TOKEN_EXPIRY && <TokenExpirySimulator />} */}
+      {/* {__DEV__ && DEBUG_CONFIG.SHOW_AUTH_DEBUG_PANEL && <AuthDebugPanel />} */}
     </ThemedView>
   );
 }
@@ -494,6 +558,7 @@ const { width, height } = Dimensions.get('window');
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop:50
   },
   scrollContainer: {
     flex: 1,
